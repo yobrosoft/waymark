@@ -1,6 +1,6 @@
 # Waymark
 
-A local-first trip planner. The map is a real street map. The highlighted line is a road route from a public routing service, with that service's distance and typical time. Saved trips stay in this browser and are not uploaded.
+A local-first trip planner. The map is Google Maps, so restaurants, landmarks, and other places are Google's. The highlighted line is a road route from a public routing service, with that service's distance and typical time. Saved trips stay in this browser and are not uploaded.
 
 The sample trip is a **proposed** Bangkok sequence for 8–14 December 2026: 16 ordered stops at 8 places, starting at Suvarnabhumi. The hotel, flights, and restaurant tables in that sample are not bookings.
 
@@ -50,7 +50,7 @@ Export a JSON file when you want a portable backup.
 
 | Use | Provider | What is sent | Limit in this app |
 | --- | --- | --- | --- |
-| Basemap, labels, POIs | [OpenFreeMap](https://openfreemap.org/) Liberty style (OpenMapTiles / OpenStreetMap) | Tile requests for the current view | Normal map pan and zoom. Attribution stays on the map. |
+| Basemap, labels, restaurants, landmarks | [Google Maps](https://developers.google.com/maps/documentation/javascript) JavaScript API | The current map view, from this browser, with the API key | Normal pan and zoom. Google’s logo stays on the map. |
 | Drive, walk, cycle | [FOSSGIS OSRM](https://routing.openstreetmap.de/about.html) (`routing.openstreetmap.de`) | The two coordinates of the selected leg | About one upstream request per second. Successful routes are cached in this browser for 7 days. Not live traffic. Graphs are rebuilt about every two days. |
 | Address search | Not used | Nothing | Turned off. The public geocoder refuses browser requests. Enter coordinates instead. |
 | Nearby food, cafes, pharmacy, shops, sights | Public [Overpass](https://wiki.openstreetmap.org/wiki/Overpass_API) (overpass-api.de, then overpass.kumi.systems if that instance is unavailable) | Pin coordinate and a 700 m category query | Slower queue. Cached 12 hours. Distances are straight-line, not travel times. |
@@ -59,7 +59,9 @@ If a service fails, the app says so. It does not draw a straight line or invent 
 
 The browser calls those services directly. A successful route is cached in this browser. The site does not keep a copy of the trip.
 
-Please keep the OpenStreetMap, OpenFreeMap, and OSRM attribution. [Fix the map](https://www.openstreetmap.org/fixthemap) if a street is wrong. The public routing server is a demo: do not scrape it or send a route for every stop at once. This app only asks for the leg you are looking at.
+Keep Google’s logo on the map, and keep the OSRM attribution. [Fix the map](https://www.openstreetmap.org/fixthemap) if a routed street is wrong. A wrong restaurant or landmark is Google’s data. The public routing server is a demo: do not scrape it or send a route for every stop at once. This app only asks for the leg you are looking at.
+
+The basemap needs a Maps JavaScript API key. Paste it into the map pane (it stays in this browser’s local storage) or set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` before `npm run dev` or `npm run build`. Enable **Maps JavaScript API** on the key, and restrict it by HTTP referrer (`http://127.0.0.1:3847/*` for this dev server). A key set at build time is visible in the static files. That is how this API works. Do not use a secret server key.
 
 Google Maps links are external pages. Times on those pages are Google's. The driving and transit links ask Google to avoid ferries. The OSRM profile does not guarantee that.
 

@@ -39,7 +39,7 @@ async function run(width, height, label) {
     await page.click("button::-p-text(Reset)");
     await page.waitForFunction(() => document.body.innerText.includes("Stop 1 of 16"));
   }
-  await page.waitForSelector(".maplibregl-canvas", { timeout: 20000 });
+  await page.waitForSelector(".gm-style", { timeout: 20000 });
   await new Promise((resolve) => setTimeout(resolve, 1500));
   await shot(page, `${label}-airport`);
 

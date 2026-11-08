@@ -18,12 +18,7 @@ import {
 } from "@/lib/format";
 import { slugify } from "@/lib/ids";
 import { resolveNearby } from "@/lib/lookups";
-import {
-  googleDirectionsUrl,
-  googlePlaceUrl,
-  NEARBY_CATEGORIES,
-  OSM_COPYRIGHT_URL,
-} from "@/lib/providers";
+import { googleDirectionsUrl, googlePlaceUrl, NEARBY_CATEGORIES } from "@/lib/providers";
 import { resolveRoute, routeLine } from "@/lib/routing";
 import {
   deleteStop,
@@ -545,6 +540,9 @@ export function Planner() {
                   </div>
                   <div className="mt-3">
                     <p className="text-xs font-medium">Nearby in OpenStreetMap, 700 m</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Restaurants and landmarks on the map are Google’s. This list is a separate search.
+                    </p>
                     <div className="mt-1 flex flex-wrap gap-1.5">
                       {(Object.keys(NEARBY_CATEGORIES) as NearbyCategory[]).map((category) => (
                         <Button
@@ -562,7 +560,7 @@ export function Planner() {
                     {nearby.status === "error" ? <p className="mt-2 text-sm text-destructive">{nearby.message}</p> : null}
                     {nearby.status === "ready" && nearby.places.length === 0 ? (
                       <p className="mt-2 text-sm text-muted-foreground">
-                        No named {NEARBY_CATEGORIES[nearbyCategory ?? "food"].label.toLowerCase()} in the public data within 700 m. The basemap may still show labels.
+                        No named {NEARBY_CATEGORIES[nearbyCategory ?? "food"].label.toLowerCase()} in the OpenStreetMap data within 700 m. Google’s map may still show places.
                       </p>
                     ) : null}
                     {nearby.status === "ready" && nearby.places.length > 0 ? (
@@ -636,7 +634,7 @@ export function Planner() {
                 })}
               </ol>
               <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
-                Map © <a className="underline" href={OSM_COPYRIGHT_URL}>OpenStreetMap</a> contributors · OpenFreeMap · Routes © OSRM / FOSSGIS, not live traffic.
+                Map © Google · Routes © OSRM / FOSSGIS, not live traffic.
                 {" "}
                 <button type="button" className="underline" onClick={() => downloadJson(`waymark-${slugify(trip.name)}.json`, book.exportTrip())}>
                   Export this trip

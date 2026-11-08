@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import * as maplibregl from "maplibre-gl";
-import "maplibre-gl/dist/maplibre-gl.css";
-import { publicAsset } from "@/lib/base-path";
-import { MAP_STYLE_URL } from "@/lib/providers";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { GOOGLE_MAPS_KEY_URL } from "@/lib/providers";
 import type { MapPlace } from "@/lib/trip-logic";
 import type { LegMode, LineStringGeometry, NearbyPlace } from "@/lib/types";
 
@@ -23,148 +23,267 @@ interface TripMapProps {
   onSelectLocation: (locationId: string) => void;
 }
 
-const EMPTY: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+const KEY_STORAGE = "waymark-google-maps-key";
+const ENV_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? "";
 
-function lineData(line: LineStringGeometry | null): GeoJSON.Feature | GeoJSON.FeatureCollection {
-  if (!line) return EMPTY;
-  return { type: "Feature", properties: {}, geometry: line };
+const MODE_COLOR: Record<LegMode, string> = {
+  driving: "#c4563a",
+  walking: "#1f4d4a",
+  cycling: "#a56b12",
+};
+
+declare global {
+  interface Window {
+    gm_authFailure?: () => void;
+  }
+}
+
+function readStoredKey(): string {
+  try {
+    return window.localStorage.getItem(KEY_STORAGE)?.trim() ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function linePath(line: LineStringGeometry): google.maps.LatLngLiteral[] {
+  return line.coordinates.map(([lon, lat]) => ({ lat, lng: lon }));
+}
+
+function applyLine(
+  casing: google.maps.Polyline,
+  stroke: google.maps.Polyline,
+  line: LineStringGeometry | null,
+  mode: LegMode,
+) {
+  if (!line) {
+    casing.setPath([]);
+    stroke.setPath([]);
+    casing.setVisible(false);
+    stroke.setVisible(false);
+    return;
+  }
+  const path = linePath(line);
+  const color = MODE_COLOR[mode] ?? MODE_COLOR.driving;
+  const dashed = mode !== "driving";
+  casing.setPath(path);
+  stroke.setPath(path);
+  casing.setOptions({ strokeColor: "#1c1915", strokeOpacity: 0.28, strokeWeight: 9, visible: true, zIndex: 1 });
+  stroke.setOptions(
+    dashed
+      ? {
+          strokeOpacity: 0,
+          strokeWeight: 5,
+          visible: true,
+          zIndex: 2,
+          icons: [
+            {
+              icon: { path: "M 0,-1 0,1", strokeOpacity: 1, strokeColor: color, scale: 3 },
+              offset: "0",
+              repeat: "14px",
+            },
+          ],
+        }
+      : { strokeColor: color, strokeOpacity: 1, strokeWeight: 5, visible: true, zIndex: 2, icons: [] },
+  );
 }
 
 export function TripMap({ places, line, mode, nearby, camera, onSelectLocation }: TripMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
-  const markersRef = useRef<maplibregl.Marker[]>([]);
+  const mapRef = useRef<google.maps.Map | null>(null);
+  const casingRef = useRef<google.maps.Polyline | null>(null);
+  const strokeRef = useRef<google.maps.Polyline | null>(null);
+  const infoRef = useRef<google.maps.InfoWindow | null>(null);
+  const markersRef = useRef<google.maps.OverlayView[]>([]);
+  const overlayCtor = useRef<
+    | (new (position: google.maps.LatLngLiteral, wrapper: HTMLElement) => google.maps.OverlayView)
+    | null
+  >(null);
   const [attempt, setAttempt] = useState(0);
   const [ready, setReady] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [storedKey, setStoredKey] = useState("");
+  const [draftKey, setDraftKey] = useState("");
+  const [keyNote, setKeyNote] = useState<string | null>(null);
   const onSelectRef = useRef(onSelectLocation);
   onSelectRef.current = onSelectLocation;
+  const key = ENV_KEY || storedKey;
+
+  useEffect(() => {
+    setStoredKey(readStoredKey());
+  }, []);
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container || !key) return;
     setReady(false);
-    maplibregl.setWorkerUrl(publicAsset("/maplibre-gl-worker.js"));
-    const map = new maplibregl.Map({
-      container,
-      style: MAP_STYLE_URL,
-      center: [100.746861, 13.681895],
-      zoom: 12.5,
-      attributionControl: false,
-      dragRotate: false,
-      pitchWithRotate: false,
-      touchPitch: false,
-      minZoom: 2,
-      maxZoom: 18,
-    });
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
-    map.addControl(new maplibregl.ScaleControl({ unit: "metric", maxWidth: 120 }), "bottom-left");
-    const compact = window.matchMedia("(max-width: 800px)").matches;
-    map.addControl(new maplibregl.AttributionControl({ compact }), "bottom-right");
-    mapRef.current = map;
+    setProblem(null);
+    let cancelled = false;
     let settled = false;
     const timer = window.setTimeout(() => {
-      if (!settled) {
-        setProblem("The street map did not load. No drawn substitute was added.");
+      if (!cancelled && !settled) {
+        setProblem("Google Maps did not load. No drawn substitute was added.");
       }
     }, 12000);
-    map.on("load", () => {
+    const previousAuthFailure = window.gm_authFailure;
+    window.gm_authFailure = () => {
+      if (cancelled) return;
       settled = true;
       window.clearTimeout(timer);
-      map.addSource("leg", { type: "geojson", data: EMPTY });
-      map.addLayer({
-        id: "leg-casing",
-        type: "line",
-        source: "leg",
-        layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": "#1c1915", "line-width": 9, "line-opacity": 0.28 },
-      });
-      map.addLayer({
-        id: "leg-solid",
-        type: "line",
-        source: "leg",
-        layout: { "line-cap": "round", "line-join": "round", visibility: "none" },
-        paint: { "line-color": "#c4563a", "line-width": 5 },
-      });
-      map.addLayer({
-        id: "leg-dash",
-        type: "line",
-        source: "leg",
-        layout: { "line-cap": "round", "line-join": "round", visibility: "none" },
-        paint: { "line-color": "#1f4d4a", "line-width": 5, "line-dasharray": [1.2, 1.15] },
-      });
-      setProblem(null);
-      setReady(true);
-    });
-    map.on("error", (event) => {
-      const message = event.error?.message ?? "";
-      if (!settled && /fetch|style|ajax|network|failed/i.test(message)) {
-        setProblem("The street map failed to load. No substitute map was drawn.");
+      setReady(false);
+      setProblem("Google Maps rejected this API key. Enable the Maps JavaScript API, and allow this page’s address on the key.");
+    };
+
+    void (async () => {
+      try {
+        setOptions({ key, v: "weekly" });
+        const { Map } = await importLibrary("maps");
+        if (cancelled) return;
+        const map = new Map(container, {
+          center: { lat: 13.681895, lng: 100.746861 },
+          zoom: 12.5,
+          minZoom: 2,
+          maxZoom: 20,
+          clickableIcons: true,
+          gestureHandling: "greedy",
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: false,
+          zoomControl: true,
+          scaleControl: true,
+          rotateControl: false,
+          tilt: 0,
+        });
+        const casing = new google.maps.Polyline({ map, clickable: false });
+        const stroke = new google.maps.Polyline({ map, clickable: false });
+        class HtmlOverlay extends google.maps.OverlayView {
+          private readonly latLng: google.maps.LatLng;
+          constructor(
+            position: google.maps.LatLngLiteral,
+            private readonly wrapper: HTMLElement,
+          ) {
+            super();
+            this.latLng = new google.maps.LatLng(position);
+          }
+          onAdd() {
+            this.getPanes()?.overlayMouseTarget.appendChild(this.wrapper);
+          }
+          draw() {
+            const point = this.getProjection()?.fromLatLngToDivPixel(this.latLng);
+            if (!point) return;
+            this.wrapper.style.left = `${point.x}px`;
+            this.wrapper.style.top = `${point.y}px`;
+          }
+          onRemove() {
+            this.wrapper.remove();
+          }
+        }
+        mapRef.current = map;
+        casingRef.current = casing;
+        strokeRef.current = stroke;
+        infoRef.current = new google.maps.InfoWindow();
+        overlayCtor.current = HtmlOverlay;
+        settled = true;
+        window.clearTimeout(timer);
+        setProblem(null);
+        setReady(true);
+      } catch (error) {
+        if (cancelled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        const message = error instanceof Error ? error.message : "Google Maps did not load.";
+        setProblem(`${message} No substitute map was drawn.`);
       }
+    })();
+
+    const observer = new ResizeObserver(() => {
+      const map = mapRef.current;
+      if (map) google.maps.event.trigger(map, "resize");
     });
-    const observer = new ResizeObserver(() => map.resize());
     observer.observe(container);
+
     return () => {
+      cancelled = true;
       window.clearTimeout(timer);
+      window.gm_authFailure = previousAuthFailure;
       observer.disconnect();
-      markersRef.current.forEach((marker) => marker.remove());
+      markersRef.current.forEach((marker) => marker.setMap(null));
       markersRef.current = [];
-      map.remove();
+      casingRef.current?.setMap(null);
+      strokeRef.current?.setMap(null);
+      infoRef.current?.close();
+      casingRef.current = null;
+      strokeRef.current = null;
+      infoRef.current = null;
+      overlayCtor.current = null;
       mapRef.current = null;
+      container.replaceChildren();
       setReady(false);
     };
-  }, [attempt]);
+  }, [attempt, key]);
 
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !ready) return;
-    const source = map.getSource("leg") as maplibregl.GeoJSONSource | undefined;
-    if (!source || source.type !== "geojson") return;
-    source.setData(lineData(line));
-    const dashed = mode !== "driving";
-    const color = mode === "walking" ? "#1f4d4a" : mode === "cycling" ? "#a56b12" : "#c4563a";
-    map.setLayoutProperty("leg-solid", "visibility", line && !dashed ? "visible" : "none");
-    map.setLayoutProperty("leg-dash", "visibility", line && dashed ? "visible" : "none");
-    map.setPaintProperty(dashed ? "leg-dash" : "leg-solid", "line-color", color);
+    const casing = casingRef.current;
+    const stroke = strokeRef.current;
+    if (!casing || !stroke || !ready) return;
+    applyLine(casing, stroke, line, mode);
   }, [line, mode, ready]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready) return;
-    markersRef.current.forEach((marker) => marker.remove());
-    const next: maplibregl.Marker[] = [];
+    const Ctor = overlayCtor.current;
+    if (!map || !Ctor || !ready) return;
+    markersRef.current.forEach((marker) => marker.setMap(null));
+    infoRef.current?.close();
+    const next: google.maps.OverlayView[] = [];
     for (const place of places) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "waymark-marker";
+      wrapper.dataset.anchor = "bottom";
+      if (place.selected) wrapper.style.zIndex = "2";
       const button = document.createElement("button");
       button.type = "button";
       button.className = `waymark-pin${place.selected ? " is-selected" : ""}`;
       button.style.setProperty("--pin", place.color);
-      button.textContent = place.badge;
+      const label = document.createElement("span");
+      label.textContent = place.badge;
+      button.append(label);
       button.setAttribute("aria-label", place.aria);
-      button.addEventListener("click", () => onSelectRef.current(place.locationId));
-      next.push(
-        new maplibregl.Marker({ element: button, anchor: "bottom" })
-          .setLngLat([place.lon, place.lat])
-          .addTo(map),
-      );
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        onSelectRef.current(place.locationId);
+      });
+      wrapper.append(button);
+      const marker = new Ctor({ lat: place.lat, lng: place.lon }, wrapper);
+      marker.setMap(map);
+      next.push(marker);
     }
     for (const place of nearby) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "waymark-marker";
+      wrapper.dataset.anchor = "center";
       const button = document.createElement("button");
       button.type = "button";
       button.className = "waymark-dot";
       button.setAttribute("aria-label", `${place.name}, ${place.kind}`);
-      button.addEventListener("click", () => {
-        new maplibregl.Popup({ offset: 12, closeButton: true })
-          .setLngLat([place.lon, place.lat])
-          .setHTML(
-            `<strong>${escapeHtml(place.name)}</strong><br/><span>${escapeHtml(place.kind)} · ${place.straightLineMeters} m straight-line</span>`,
-          )
-          .addTo(map);
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const info = infoRef.current;
+        if (!info) return;
+        const content = document.createElement("div");
+        const title = document.createElement("strong");
+        title.textContent = place.name;
+        const detail = document.createElement("div");
+        detail.textContent = `${place.kind} · ${place.straightLineMeters} m straight-line`;
+        content.append(title, detail);
+        info.setContent(content);
+        info.setPosition({ lat: place.lat, lng: place.lon });
+        info.open({ map });
       });
-      next.push(
-        new maplibregl.Marker({ element: button, anchor: "center" })
-          .setLngLat([place.lon, place.lat])
-          .addTo(map),
-      );
+      wrapper.append(button);
+      const marker = new Ctor({ lat: place.lat, lng: place.lon }, wrapper);
+      marker.setMap(map);
+      next.push(marker);
     }
     markersRef.current = next;
   }, [places, nearby, ready]);
@@ -172,49 +291,120 @@ export function TripMap({ places, line, mode, nearby, camera, onSelectLocation }
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready || !camera) return;
-    const duration = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 750;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (camera.type === "point") {
-      map.flyTo({ center: [camera.lon, camera.lat], zoom: camera.zoom, duration, essential: true });
+      const center = { lat: camera.lat, lng: camera.lon };
+      if (reduce) map.setCenter(center);
+      else map.panTo(center);
+      map.setZoom(camera.zoom);
       return;
     }
     if (camera.points.length === 0) return;
-    const bounds = new maplibregl.LngLatBounds(camera.points[0], camera.points[0]);
-    for (const point of camera.points) bounds.extend(point);
-    map.fitBounds(bounds, {
-      padding: { top: 56, right: 48, bottom: 56, left: 48 },
-      duration,
-      maxZoom: camera.maxZoom ?? 15,
-      essential: true,
+    const bounds = new google.maps.LatLngBounds();
+    for (const [lon, lat] of camera.points) bounds.extend({ lat, lng: lon });
+    map.fitBounds(bounds, { top: 56, right: 48, bottom: 56, left: 48 });
+    const maxZoom = camera.maxZoom ?? 15;
+    google.maps.event.addListenerOnce(map, "bounds_changed", () => {
+      const zoom = map.getZoom();
+      if (zoom != null && zoom > maxZoom) map.setZoom(maxZoom);
     });
   }, [camera, ready]);
 
+  function saveKey(event: FormEvent) {
+    event.preventDefault();
+    const next = draftKey.trim();
+    if (!next) {
+      setKeyNote("Paste the API key first.");
+      return;
+    }
+    try {
+      window.localStorage.setItem(KEY_STORAGE, next);
+    } catch {
+      setKeyNote("This browser blocked local storage, so the key was not saved.");
+      return;
+    }
+    setKeyNote(null);
+    setDraftKey("");
+    if (window.google?.maps) {
+      window.location.reload();
+      return;
+    }
+    setStoredKey(next);
+  }
+
+  function forgetKey() {
+    try {
+      window.localStorage.removeItem(KEY_STORAGE);
+    } catch {
+      // The form still returns if the stored value cannot be cleared.
+    }
+    if (window.google?.maps) {
+      window.location.reload();
+      return;
+    }
+    setStoredKey("");
+    setProblem(null);
+  }
+
   return (
     <div className="relative h-full min-h-64">
-      <div ref={containerRef} className="h-full w-full" role="application" aria-label="Street map" />
+      <div ref={containerRef} className="h-full w-full" role="application" aria-label="Google map" />
+      {!key ? (
+        <form
+          className="absolute inset-0 z-20 grid place-items-center bg-background/85 p-4"
+          onSubmit={saveKey}
+        >
+          <div className="grid w-full max-w-md gap-3 rounded-xl border bg-card p-4 shadow-lg">
+            <div>
+              <p className="font-medium">Google Maps needs an API key</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Restaurants, landmarks, and other places come from Google. Enable the Maps JavaScript API, create a
+                browser key, and allow <span className="whitespace-nowrap">http://127.0.0.1:3847/*</span>. The key stays
+                in this browser.
+              </p>
+            </div>
+            <Input
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              value={draftKey}
+              placeholder="Maps JavaScript API key"
+              aria-label="Google Maps API key"
+              onChange={(event) => setDraftKey(event.target.value)}
+            />
+            {keyNote ? <p className="text-sm text-destructive">{keyNote}</p> : null}
+            <div className="flex flex-wrap items-center gap-3">
+              <Button type="submit">Show the Google map</Button>
+              <a className="text-sm underline" href={GOOGLE_MAPS_KEY_URL} target="_blank" rel="noreferrer">
+                Create a key
+              </a>
+            </div>
+          </div>
+        </form>
+      ) : null}
       {problem ? (
         <div className="absolute inset-x-3 top-3 z-20 rounded-xl border border-destructive/30 bg-card p-3 text-sm shadow-lg">
           <p className="font-medium text-destructive">Basemap unavailable</p>
           <p className="mt-1 text-muted-foreground">{problem}</p>
-          <button
-            type="button"
-            className="mt-2 text-sm font-medium text-primary underline"
-            onClick={() => {
-              setProblem(null);
-              setAttempt((value) => value + 1);
-            }}
-          >
-            Try the street map again
-          </button>
+          <div className="mt-2 flex flex-wrap gap-3">
+            <button
+              type="button"
+              className="text-sm font-medium text-primary underline"
+              onClick={() => {
+                setProblem(null);
+                setAttempt((value) => value + 1);
+              }}
+            >
+              Try Google Maps again
+            </button>
+            {ENV_KEY ? null : (
+              <button type="button" className="text-sm font-medium text-primary underline" onClick={forgetKey}>
+                Use a different key
+              </button>
+            )}
+          </div>
         </div>
       ) : null}
     </div>
   );
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
 }

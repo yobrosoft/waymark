@@ -212,12 +212,25 @@
   cursor: pointer;
 }
 
-.maplibregl-popup-content {
+.waymark-marker {
+  position: absolute;
+}
+
+.waymark-marker[data-anchor="bottom"] {
+  transform: translate(-50%, -100%);
+}
+
+.waymark-marker[data-anchor="center"] {
+  transform: translate(-50%, -50%);
+}
+
+.waymark-pin span {
+  display: block;
+  transform: rotate(45deg);
+}
+
+.gm-style .gm-style-iw-c {
   border-radius: 0.6rem;
   font-family: var(--font-outfit), sans-serif;
   color: #1e1a16;
-}
-
-.maplibregl-ctrl-attrib {
-  font-size: 10px;
 }

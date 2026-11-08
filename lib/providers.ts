@@ -1,7 +1,8 @@
 import type { Coord, LegMode, NearbyCategory } from "@/lib/types";
 
-/** OpenFreeMap Liberty: OSM-backed vector streets, labels, and POIs. No API key. */
-export const MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+/** Maps JavaScript API console. The key is a browser key, restricted by HTTP referrer. */
+export const GOOGLE_MAPS_KEY_URL =
+  "https://console.cloud.google.com/apis/library/maps-backend.googleapis.com";
 
 export const APP_USER_AGENT =
   "Waymark/1.0 (personal local-first trip map; https://www.openstreetmap.org/copyright)";

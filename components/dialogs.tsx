@@ -93,12 +93,14 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
           <section>
             <h3 className="font-heading text-base font-medium">What leaves the browser</h3>
             <p className="mt-1 text-muted-foreground">
-              The street map asks OpenFreeMap for tiles around the view. A selected drive, walk, or
-              cycle leg sends those two coordinates from this browser to the FOSSGIS OSRM demo
-              (routing.openstreetmap.de). A nearby-category search sends the pin and a 700 metre
-              query to a public Overpass server, which often refuses or times out; the list then stays
-              empty and says so. Address search is off because the public geocoder refuses browser
-              requests. Names, notes, and the rest of the library are not part of those requests.
+              The map asks Google for the streets, restaurants, landmarks, and other places in the
+              current view. A selected drive, walk, or cycle leg sends those two coordinates from this
+              browser to the FOSSGIS OSRM demo (routing.openstreetmap.de). A nearby-category search
+              sends the pin and a 700 metre query to a public Overpass server, which often refuses or
+              times out; the list then stays empty and says so. Address search is off because the public
+              geocoder refuses browser requests. Names, notes, and the rest of the library are not part
+              of those requests. The Google Maps key stays in this browser, or in the build if one was
+              set there.
             </p>
           </section>
           <section>
@@ -124,10 +126,9 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
           <section>
             <h3 className="font-heading text-base font-medium">Limits</h3>
             <p className="mt-1 text-muted-foreground">
-              Public routing is limited to about one request per second, geocoding the same, and nearby
-              search slower still. Results are cached in this browser. Do not bulk-export routes.
-              Map data © OpenStreetMap contributors, tiles via OpenFreeMap and OpenMapTiles, routes via
-              OSRM / FOSSGIS.
+              Public routing is limited to about one request per second, and nearby search is slower.
+              Results are cached in this browser. Do not bulk-export routes. Map places © Google. Routes
+              via OSRM / FOSSGIS, using OpenStreetMap.
             </p>
             <p className="mt-2">
               <a className="underline" href={OSM_COPYRIGHT_URL} target="_blank" rel="noreferrer">
