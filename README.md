@@ -1,1 +1,124 @@
-# waymark
+# Waymark
+
+A local-first trip planner. The map is a real street map. The highlighted line is a road route from a public routing service, with that service's distance and typical time. Saved trips stay in this browser and are not uploaded.
+
+The sample trip is a **proposed** Bangkok sequence for 8–14 December 2026: 16 ordered stops at 8 places, starting at Suvarnabhumi. The hotel, flights, and restaurant tables in that sample are not bookings.
+
+## Run locally
+
+```bash
+npm install
+npm run dev
+```
+
+Open [http://127.0.0.1:3847](http://127.0.0.1:3847).
+
+Other scripts:
+
+| Script | What it does |
+| --- | --- |
+| `npm run dev` | Next.js dev server on port 3847 |
+| `npm run build` | Static export at the site root (`out/`) |
+| `npm run build:pages` | Static export for `https://<user>.github.io/waymark/` |
+| `npm test` | Route-state, persistence, and import tests |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run lint` | ESLint |
+
+No API key and no environment variable are required.
+
+## What you can do
+
+- Step **Next** and **Back** through the ordered stops. Arrow keys do the same when a text field is not focused.
+- **Reset** returns to the first stop and frames the airport (or that trip's first pin).
+- **Overview** frames every saved place. **Fit leg** frames the current road route, or the pin if there is no route.
+- The day chips jump to the first stop on that day. A map pin jumps to the next visit of that place, then wraps.
+- Drive, walk, and cycle use real routed geometry. Transit and taxi open Google Maps instead of showing a made-up time.
+- Save several trips in this browser: create, edit, duplicate, delete (with confirmation), reorder stops, and edit coordinates or search for a place.
+- Export one trip or the whole library as JSON. Import validates the file before anything is written. Adding a file as new trips does not overwrite existing ones. Replacing same ids is a separate button.
+
+Two hotel stops in the sample are same-place rest. Those legs do not request a route. Later visits to the hotel do.
+
+## Where data lives
+
+Trip names, notes, days, and stops are stored in **IndexedDB** in this browser profile (`waymark` / `library`). They are not synced and they are not uploaded. Clearing site data, or opening another browser or phone, starts from an empty book (the sample is added only when that store is empty). A reload does not put the sample back on top of edits. If the saved document is from a newer version or does not validate, Waymark leaves it untouched and offers a download.
+
+The last stop you were viewing is a small `localStorage` preference. Losing it does not change the trip.
+
+Export a JSON file when you want a portable backup.
+
+## Map and routing providers
+
+| Use | Provider | What is sent | Limit in this app |
+| --- | --- | --- | --- |
+| Basemap, labels, POIs | [OpenFreeMap](https://openfreemap.org/) Liberty style (OpenMapTiles / OpenStreetMap) | Tile requests for the current view | Normal map pan and zoom. Attribution stays on the map. |
+| Drive, walk, cycle | [FOSSGIS OSRM](https://routing.openstreetmap.de/about.html) (`routing.openstreetmap.de`) | The two coordinates of the selected leg | About one upstream request per second. Successful routes are cached in this browser for 7 days. Not live traffic. Graphs are rebuilt about every two days. |
+| Address search | Not used | Nothing | Turned off. The public geocoder refuses browser requests. Enter coordinates instead. |
+| Nearby food, cafes, pharmacy, shops, sights | Public [Overpass](https://wiki.openstreetmap.org/wiki/Overpass_API) (overpass-api.de, then overpass.kumi.systems if that instance is unavailable) | Pin coordinate and a 700 m category query | Slower queue. Cached 12 hours. Distances are straight-line, not travel times. |
+
+If a service fails, the app says so. It does not draw a straight line or invent a duration. Same-place legs never call the router.
+
+The browser calls those services directly. A successful route is cached in this browser. The site does not keep a copy of the trip.
+
+Please keep the OpenStreetMap, OpenFreeMap, and OSRM attribution. [Fix the map](https://www.openstreetmap.org/fixthemap) if a street is wrong. The public routing server is a demo: do not scrape it or send a route for every stop at once. This app only asks for the leg you are looking at.
+
+Google Maps links are external pages. Times on those pages are Google's. The driving and transit links ask Google to avoid ferries. The OSRM profile does not guarantee that.
+
+Pins are facility, property, or complex points from the source notes. They are not a surveyed step-free entrance or an airport curb.
+
+## JSON
+
+Version 1 documents:
+
+- A library: `{ "schemaVersion": 1, "kind": "waymark.library", "trips": [ ... ] }`
+- A trip: `{ "schemaVersion": 1, "kind": "waymark.trip", "stops": [ ... ] }`
+
+The JSON Schema is [`schema/waymark-library.schema.json`](schema/waymark-library.schema.json). Import also accepts a single trip or an array of trips. Files over 2 MB, broken JSON, unknown future versions, coordinates outside the valid range, and stops that point at missing places are rejected. Unknown keys are rejected. Nothing is written until you choose **Add as new trips** or **Replace trips with the same id**.
+
+Shape, in short:
+
+```text
+Library
+  trips[]
+    days[]            calendar dates
+    locations[]       reusable places (name, address, lat, lon, pin note)
+    stops[]           ordered visits (day, place, planned time, status, notes, access)
+    legModes{}        "fromStopId>toStopId" -> driving | walking | cycling
+```
+
+Stop status `buffer` is a same-place rest. Trip status `proposed` means the plan is not confirmed.
+
+## Publish the static site
+
+The app is a static export. There is no Node server and no automatic deploy from the Origin repository to GitHub.
+
+```bash
+npm run build:pages
+```
+
+That writes `out/` with asset URLs under `/waymark`, a copy of the MapLibre worker, and `.nojekyll`. To check it locally, serve the parent of a `waymark` folder:
+
+```bash
+rm -rf /tmp/waymark-pages && mkdir -p /tmp/waymark-pages/waymark && cp -a out/. /tmp/waymark-pages/waymark/
+npx --yes serve /tmp/waymark-pages -p 3847
+```
+
+Open `http://127.0.0.1:3847/waymark/`.
+
+To publish, push **only the contents of `out/`** to the `gh-pages` branch of the public site repository. Do not push this source repository’s history there. In that repository’s Pages settings, choose **Deploy from a branch**, branch `gh-pages`, folder `/`. GitHub requires an admin with a verified email address to push that branch.
+
+Drive, walk, and cycle requests go from the browser to the FOSSGIS OSRM demo. Nearby search calls public Overpass and shows a clear failure when those servers are busy. Address search is off. Nothing in the published files is a saved trip or a secret.
+
+## Sample coordinates
+
+Sourced for the proposed Bangkok trip, not surveyed entrances:
+
+| Place | Latitude | Longitude |
+| --- | --- | --- |
+| Suvarnabhumi Airport (facility, not the pickup curb) | 13.681895 | 100.746861 |
+| Chatrium Residence Sathon (proposed, not booked) | 13.702567 | 100.53755 |
+| Wat Arun | 13.74361 | 100.48889 |
+| ICONSIAM | 13.726694 | 100.510498 |
+| CentralWorld | 13.746944 | 100.539719 |
+| Asiatique The Riverfront | 13.706022 | 100.50466 |
+| Supanniga Eating Room, Sathorn 10 | 13.723122 | 100.527273 |
+| Baan Khanitha Sathorn | 13.7231005745 | 100.5364619293 |
