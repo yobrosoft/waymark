@@ -46,7 +46,8 @@ next-env.d.ts
 # agent session copies, not the browser trip book
 /data
 
-# generated static site and map worker
+# generated static site, map worker, and MCP bundle
 /out
+/dist
 /public/maplibre-gl-worker.js
 /public/.nojekyll

@@ -1,58 +1,94 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { samePlan } from "@/lib/agent-diff";
 import type { AgentSuggestion } from "@/lib/agent-session";
 import type { Trip } from "@/lib/types";
 
-const TOKEN_KEY = "waymark-agent-token";
+export interface SharedTrip {
+  tripId: string;
+  name: string;
+  revision: number;
+  updatedAt: string;
+  pendingSummary: string | null;
+  pendingStale: boolean;
+}
+
+const BASE = (process.env.NEXT_PUBLIC_WAYMARK_AGENT_URL ?? "").replace(/\/$/, "");
 
 export function useAgentLink(trip: Trip | null) {
-  const [token, setToken] = useState<string | null>(null);
   const [revision, setRevision] = useState<number | null>(null);
-  const [tripId, setTripId] = useState<string | null>(null);
-  const [tripName, setTripName] = useState<string | null>(null);
   const [pending, setPending] = useState<AgentSuggestion | null>(null);
   const [preview, setPreview] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [holding, setHolding] = useState<"off" | "local" | "remote">("off");
+  const [remoteTrip, setRemoteTrip] = useState<Trip | null>(null);
+  const [shared, setShared] = useState<SharedTrip[]>([]);
+  const seenRevision = useRef<number | null>(null);
 
   useEffect(() => {
-    const saved = window.sessionStorage.getItem(TOKEN_KEY);
-    if (saved) setToken(saved);
+    if (!BASE) return;
+    let stop = false;
+    const pullList = async () => {
+      try {
+        const response = await fetch(`${BASE}/api/agent/trips`);
+        if (stop || !response.ok) return;
+        const body = (await response.json()) as { trips?: SharedTrip[] };
+        setShared(body.trips ?? []);
+        setError((current) => (current?.startsWith("Could not reach") ? null : current));
+      } catch {
+        if (!stop) setError("Could not reach Waymark on this Mac. The trip in this browser was not changed.");
+      }
+    };
+    void pullList();
+    const id = window.setInterval(() => void pullList(), 3000);
+    return () => {
+      stop = true;
+      window.clearInterval(id);
+    };
   }, []);
 
   useEffect(() => {
-    if (!token) return;
+    if (!BASE || !trip) return;
     let stop = false;
     const pull = async () => {
       try {
-        const response = await fetch("/api/agent/session", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const response = await fetch(`${BASE}/api/agent/trips/${encodeURIComponent(trip.id)}`);
         if (stop) return;
-        if (response.status === 404) {
-          window.sessionStorage.removeItem(TOKEN_KEY);
-          setToken(null);
-          setPending(null);
-          setPreview(false);
-          setError("The agent session ended. The trip saved in this browser was not changed.");
-          return;
-        }
         const body = (await response.json()) as {
           ok?: boolean;
+          shared?: boolean;
           revision?: number;
-          tripId?: string;
-          tripName?: string;
+          trip?: Trip;
           pending?: AgentSuggestion | null;
         };
         if (!response.ok || !body.ok) return;
-        setRevision(body.revision ?? null);
-        setTripId(body.tripId ?? null);
-        setTripName(body.tripName ?? null);
+        if (body.shared === false || !body.trip || typeof body.revision !== "number") {
+          seenRevision.current = null;
+          setHolding("off");
+          setRemoteTrip(null);
+          setPending(null);
+          setPreview(false);
+          setRevision(null);
+          return;
+        }
+        setRevision(body.revision);
         setPending(body.pending ?? null);
         if (!body.pending) setPreview(false);
+        if (samePlan(trip, body.trip)) {
+          seenRevision.current = body.revision;
+          setRemoteTrip(null);
+          setHolding("local");
+        } else if (seenRevision.current == null || body.revision > seenRevision.current) {
+          seenRevision.current = body.revision;
+          setRemoteTrip(body.trip);
+          setHolding("remote");
+        } else {
+          setHolding("local");
+        }
       } catch {
-        setError("Could not reach the agent session. Your saved trip was not changed.");
+        if (!stop) setError("Could not reach Waymark on this Mac. The trip in this browser was not changed.");
       }
     };
     void pull();
@@ -61,76 +97,77 @@ export function useAgentLink(trip: Trip | null) {
       stop = true;
       window.clearInterval(id);
     };
-  }, [token]);
+  }, [trip]);
 
   useEffect(() => {
-    if (!token || !trip || !tripId || trip.id !== tripId) return;
+    if (!BASE || holding !== "local" || !trip) return;
     const handle = window.setTimeout(() => {
-      void fetch("/api/agent/session", {
+      void fetch(`${BASE}/api/agent/trips/${encodeURIComponent(trip.id)}`, {
         method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ trip }),
       })
         .then(async (response) => {
           if (!response.ok) return;
           const body = (await response.json()) as { revision?: number; pending?: AgentSuggestion | null };
-          if (typeof body.revision === "number") setRevision(body.revision);
+          if (typeof body.revision === "number") {
+            seenRevision.current = body.revision;
+            setRevision(body.revision);
+          }
           if (body.pending !== undefined) setPending(body.pending);
         })
         .catch(() => undefined);
     }, 400);
     return () => window.clearTimeout(handle);
-  }, [token, tripId, trip]);
+  }, [holding, trip]);
 
   async function start() {
     if (!trip) return;
+    if (!BASE) {
+      setError("This app does not know the Waymark address on your tailnet yet.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch("/api/agent/session", {
-        method: "POST",
+      const response = await fetch(`${BASE}/api/agent/trips/${encodeURIComponent(trip.id)}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ trip }),
       });
-      const body = (await response.json()) as { ok?: boolean; error?: string; token?: string; revision?: number; tripId?: string };
-      if (!response.ok || !body.token) {
-        setError(body.error ?? "Could not open a session.");
+      const body = (await response.json()) as { ok?: boolean; error?: string; revision?: number; pending?: AgentSuggestion | null };
+      if (!response.ok || !body.ok) {
+        setError(body.error ?? "Could not share this trip.");
         return;
       }
-      window.sessionStorage.setItem(TOKEN_KEY, body.token);
-      setToken(body.token);
+      seenRevision.current = body.revision ?? 1;
+      setHolding("local");
+      setRemoteTrip(null);
       setRevision(body.revision ?? 1);
-      setTripId(body.tripId ?? trip.id);
-      setTripName(trip.name);
+      setPending(body.pending ?? null);
     } catch {
-      setError("Could not open a session. The trip stayed in this browser only.");
+      setError("Could not share this trip. It stayed in this browser only.");
     } finally {
       setBusy(false);
     }
   }
 
   async function stop() {
-    if (!token) return;
-    await fetch("/api/agent/session", {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    }).catch(() => undefined);
-    window.sessionStorage.removeItem(TOKEN_KEY);
-    setToken(null);
+    if (!BASE || !trip) return;
+    await fetch(`${BASE}/api/agent/trips/${encodeURIComponent(trip.id)}`, { method: "DELETE" }).catch(() => undefined);
+    seenRevision.current = null;
+    setHolding("off");
     setPending(null);
     setPreview(false);
-    setTripId(null);
+    setRemoteTrip(null);
     setRevision(null);
   }
 
   async function dismiss() {
-    if (!token) return;
-    const response = await fetch("/api/agent/session/decision", {
+    if (!BASE || !trip) return;
+    const response = await fetch(`${BASE}/api/agent/trips/${encodeURIComponent(trip.id)}/decision`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "dismiss" }),
     });
     if (response.ok) {
@@ -141,14 +178,14 @@ export function useAgentLink(trip: Trip | null) {
   }
 
   async function apply(commit: (next: Trip, index?: number) => Promise<string[] | null>) {
-    if (!token || !pending) return;
+    if (!BASE || !trip || !pending) return;
     if (pending.stale) {
-      setError("This suggestion is older than your latest edits. Dismiss it and ask the agent for a new one.");
+      setError("This suggestion is older than the saved trip. Dismiss it and ask Grok for a new one.");
       return;
     }
-    const response = await fetch("/api/agent/session/decision", {
+    const response = await fetch(`${BASE}/api/agent/trips/${encodeURIComponent(trip.id)}/decision`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "apply" }),
     });
     const body = (await response.json()) as { ok?: boolean; error?: string; trip?: Trip; revision?: number };
@@ -163,28 +200,38 @@ export function useAgentLink(trip: Trip | null) {
     }
     setPending(null);
     setPreview(false);
+    setRemoteTrip(null);
+    setHolding("local");
     setRevision(body.revision ?? null);
     setError(null);
   }
 
-  const matching = Boolean(trip && tripId && trip.id === tripId);
-  const activePending = matching ? pending : null;
+  async function fetchTrip(tripId: string): Promise<Trip | null> {
+    if (!BASE) return null;
+    const response = await fetch(`${BASE}/api/agent/trips/${encodeURIComponent(tripId)}`);
+    if (!response.ok) return null;
+    const body = (await response.json()) as { trip?: Trip };
+    return body.trip ?? null;
+  }
+
+  const sharing = holding !== "off";
 
   return {
-    token,
+    configured: Boolean(BASE),
     revision,
-    tripId,
-    tripName,
-    pending: activePending,
-    preview: preview && Boolean(activePending),
+    pending: sharing ? pending : null,
+    preview: preview && sharing && Boolean(pending),
     setPreview,
     error,
     clearError: () => setError(null),
     busy,
-    matching,
+    sharing,
+    remoteTrip,
+    shared,
     start,
     stop,
     dismiss,
     apply,
+    fetchTrip,
   };
 }

@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { AgentBar } from "@/components/agent-bar";
 import { ConfirmDelete, HelpDialog, LibraryDialog, StopEditor, TripEditor } from "@/components/dialogs";
+import { useAgentLink } from "@/components/use-agent-link";
 import { downloadJson } from "@/components/download";
 import { TripMap, type Camera, type CameraSpec } from "@/components/trip-map";
 import { useTripBook } from "@/components/use-trip-book";
@@ -101,7 +103,9 @@ export function Planner() {
   >({ status: "idle" });
   const [otherOpen, setOtherOpen] = useState(false);
 
-  const trip = book.trip;
+  const savedTrip = book.trip;
+  const link = useAgentLink(savedTrip);
+  const trip = link.preview && link.pending ? link.pending.trip : savedTrip;
   const index = book.index;
   const leg = trip ? selectedLeg(trip, index) : null;
   const legId = leg ? `${leg.fromStop.id}>${leg.toStop.id}:${leg.mode}:${leg.samePlace}` : "start";
@@ -302,6 +306,19 @@ export function Planner() {
       </section>
 
       <aside className="waymark-panel flex min-h-0 flex-col border-t bg-card lg:border-t-0 lg:border-r" aria-label="Trip plan">
+        <AgentBar
+          trip={savedTrip}
+          link={link}
+          onApplied={(next, index) => book.commitTrip(next, index)}
+          onOpenShared={async (tripId) => {
+            const shared = await link.fetchTrip(tripId);
+            if (!shared) return;
+            const message = await book.importTrips([shared], "replace");
+            if (message) return;
+            await book.selectTrip(tripId);
+          }}
+        />
+        <div className={`flex min-h-0 flex-1 flex-col ${link.preview ? "pointer-events-none opacity-60" : ""}`}>
         {book.warning ? (
           <div className="flex items-start justify-between gap-2 border-b bg-amber-50 px-3 py-2 text-sm text-amber-950">
             <p>{book.warning}</p>
@@ -643,6 +660,7 @@ export function Planner() {
             </div>
           </>
         )}
+        </div>
       </aside>
 
       <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />

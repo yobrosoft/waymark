@@ -100,7 +100,9 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
               times out; the list then stays empty and says so. Address search is off because the public
               geocoder refuses browser requests. Names, notes, and the rest of the library are not part
               of those requests. The Google Maps key stays in this browser, or in the build if one was
-              set there.
+              set there. Sharing a trip copies that trip to the Waymark server on this Mac so Grok can
+              read it and send a suggestion. The suggestion is not written here until you apply it.
+              Stop sharing deletes that server copy. Other trips stay in this browser.
             </p>
           </section>
           <section>

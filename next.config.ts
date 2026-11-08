@@ -7,7 +7,10 @@ const nextConfig: NextConfig = {
   basePath,
   assetPrefix: basePath || undefined,
   images: { unoptimized: true },
-  allowedDevOrigins: ["127.0.0.1"],
+  allowedDevOrigins: (process.env.WAYMARK_DEV_ORIGINS ?? "127.0.0.1")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
 };
 
 export default nextConfig;

@@ -1,6 +1,9 @@
 import { randomBytes } from "node:crypto";
+import { samePlan } from "@/lib/agent-diff";
 import { integrityIssues, tripSchema, zodIssues } from "@/lib/schema";
 import type { Trip } from "@/lib/types";
+
+export { samePlan };
 
 export const AGENT_INSTRUCTIONS =
   "GET returns the saved trip and its revision. PUT a suggestion with basedOnRevision set to that revision, a short summary, and the full trip. The saved trip is not replaced until the person applies the suggestion in Waymark. A 409 means the saved trip changed; read it again and send a new suggestion.";
@@ -34,24 +37,6 @@ export function emptyBook(): SessionBook {
 
 export function newAgentToken(): string {
   return randomBytes(24).toString("base64url");
-}
-
-export function samePlan(a: Trip, b: Trip): boolean {
-  const rest = (trip: Trip) =>
-    JSON.stringify({
-      schemaVersion: trip.schemaVersion,
-      id: trip.id,
-      name: trip.name,
-      summary: trip.summary,
-      timezone: trip.timezone,
-      status: trip.status,
-      days: trip.days,
-      locations: trip.locations,
-      stops: trip.stops,
-      legModes: trip.legModes,
-      createdAt: trip.createdAt,
-    });
-  return rest(a) === rest(b);
 }
 
 function checkedTrip(input: unknown): { ok: true; trip: Trip } | { ok: false; error: string; issues: string[] } {

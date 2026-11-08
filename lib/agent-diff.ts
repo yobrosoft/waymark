@@ -1,5 +1,23 @@
 import type { Trip } from "@/lib/types";
 
+export function samePlan(a: Trip, b: Trip): boolean {
+  const rest = (trip: Trip) =>
+    JSON.stringify({
+      schemaVersion: trip.schemaVersion,
+      id: trip.id,
+      name: trip.name,
+      summary: trip.summary,
+      timezone: trip.timezone,
+      status: trip.status,
+      days: trip.days,
+      locations: trip.locations,
+      stops: trip.stops,
+      legModes: trip.legModes,
+      createdAt: trip.createdAt,
+    });
+  return rest(a) === rest(b);
+}
+
 export interface PlanChange {
   id: string;
   text: string;

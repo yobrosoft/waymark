@@ -24,7 +24,9 @@ Other scripts:
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint |
 
-No API key and no environment variable are required.
+The map needs a Google Maps JavaScript API key. Paste it into the map, or set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`. No other key is required to browse a trip.
+
+To let Grok read a shared trip and send a suggestion back, run the Waymark MCP and set `NEXT_PUBLIC_WAYMARK_AGENT_URL` to its tailnet address. See [Grok on the tailnet](#grok-on-the-tailnet).
 
 ## What you can do
 
@@ -88,6 +90,25 @@ Library
 ```
 
 Stop status `buffer` is a same-place rest. Trip status `proposed` means the plan is not confirmed.
+
+## Grok on the tailnet
+
+The MCP is a separate process, same shape as a small local connector. It listens on loopback only. One port is the public Grok connector. The other is the browser API, which you publish with Tailscale Serve so a phone or computer on your tailnet can open Waymark and see the suggestion. Do not put the browser port on Funnel. A suggestion is stored on this Mac and is not written into the browser until you apply it.
+
+| Port | Who calls it | What it serves |
+| --- | --- | --- |
+| `127.0.0.1:8793` | Grok, through Funnel | `/mcp` and the OAuth consent flow. Scope `waymark:plan`. |
+| `127.0.0.1:8794` | Waymark in the browser, through Tailscale Serve | `/api/agent/trips`. No bearer token. Tailnet membership is the lock. |
+
+Tools are `list_trips`, `get_trip`, and `suggest_trip`. `suggest_trip` does not replace the saved trip. The app shows the summary and a map preview.
+
+```bash
+npm run mcp
+```
+
+Copy `deploy/waymark-mcp.secrets.env.example` to `~/.config/waymark-mcp/secrets.env`, mode `0600`. The bearer is what you paste on the consent page. It is not a Google key. Grants live in memory and drop when the process restarts. The shared trips live in `~/.local/share/waymark-mcp/sessions.json`.
+
+In the Grok connector form, use client id `grok`, an empty secret, token auth method none, and scope `waymark:plan`. The server URL is `https://<your-machine>.<tailnet>.ts.net:10000/mcp` when Funnel sends port 10000 to `127.0.0.1:8793`.
 
 ## Publish the static site
 
