@@ -416,7 +416,7 @@ export function Planner() {
                   <p className="text-xs tracking-wide text-muted-foreground uppercase">Selected leg</p>
                   <h2 className="mt-1 font-heading text-lg leading-tight">
                     {leg.from.name}
-                    <span className="text-muted-foreground"> \u2192 </span>
+                    <span className="text-muted-foreground"> → </span>
                     {leg.to.name}
                   </h2>
                   {leg.samePlace ? (
@@ -441,12 +441,12 @@ export function Planner() {
                           Other
                         </Button>
                       </div>
-                      {shown.status === "loading" ? <p className="mt-3 text-sm">Asking the routing service for this leg\u2026</p> : null}
+                      {shown.status === "loading" ? <p className="mt-3 text-sm">Asking the routing service for this leg…</p> : null}
                       {shown.status === "ready" ? (
                         <div className="mt-3">
                           <p className="font-heading text-2xl">
                             {formatDistance(shown.route.distanceMeters)}
-                            <span className="text-muted-foreground"> \u00b7 </span>
+                            <span className="text-muted-foreground"> · </span>
                             {formatDuration(shown.route.durationSeconds)}
                           </p>
                           <p className="mt-1 text-xs text-muted-foreground">
@@ -491,7 +491,7 @@ export function Planner() {
               {stop && place && day ? (
                 <section className="rounded-xl border p-3">
                   <p className="text-xs text-muted-foreground">
-                    {formatDay(day.date)} \u00b7 {day.title}
+                    {formatDay(day.date)} · {day.title}
                   </p>
                   <div className="mt-1 flex items-start justify-between gap-2">
                     <h2 className="font-heading text-2xl leading-tight">{place.name}</h2>
@@ -558,7 +558,7 @@ export function Planner() {
                         </Button>
                       ))}
                     </div>
-                    {nearby.status === "loading" ? <p className="mt-2 text-sm">Looking up mapped places\u2026</p> : null}
+                    {nearby.status === "loading" ? <p className="mt-2 text-sm">Looking up mapped places…</p> : null}
                     {nearby.status === "error" ? <p className="mt-2 text-sm text-destructive">{nearby.message}</p> : null}
                     {nearby.status === "ready" && nearby.places.length === 0 ? (
                       <p className="mt-2 text-sm text-muted-foreground">
@@ -572,7 +572,7 @@ export function Planner() {
                           <li key={item.id} className="rounded-md border px-2 py-1.5 text-sm">
                             <p className="font-medium">{item.name}</p>
                             <p className="text-xs text-muted-foreground">
-                              {item.kind} \u00b7 {formatDistance(item.straightLineMeters)} straight-line, not a walk time
+                              {item.kind} · {formatDistance(item.straightLineMeters)} straight-line, not a walk time
                             </p>
                             <span className="mt-1 flex gap-3 text-xs">
                               <a className="underline" href={googlePlaceUrl(item.name, "", item)} target="_blank" rel="noreferrer">
@@ -617,8 +617,8 @@ export function Planner() {
                         <button type="button" className="min-w-0 flex-1 px-2 py-1.5 text-left" onClick={() => book.setIndex(stopIndex)}>
                           <span className="text-xs text-muted-foreground">
                             {stopIndex + 1}
-                            {itemDay ? ` \u00b7 ${formatDay(itemDay.date)}` : ""}
-                            {item.status === "buffer" ? " \u00b7 rest" : ""}
+                            {itemDay ? ` · ${formatDay(itemDay.date)}` : ""}
+                            {item.status === "buffer" ? " · rest" : ""}
                           </span>
                           <span className="block truncate text-sm">{itemPlace?.name ?? "Missing place"}</span>
                         </button>
@@ -636,7 +636,7 @@ export function Planner() {
                 })}
               </ol>
               <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
-                Map \u00a9 <a className="underline" href={OSM_COPYRIGHT_URL}>OpenStreetMap</a> contributors \u00b7 OpenFreeMap \u00b7 Routes \u00a9 OSRM / FOSSGIS, not live traffic.
+                Map © <a className="underline" href={OSM_COPYRIGHT_URL}>OpenStreetMap</a> contributors · OpenFreeMap · Routes © OSRM / FOSSGIS, not live traffic.
                 {" "}
                 <button type="button" className="underline" onClick={() => downloadJson(`waymark-${slugify(trip.name)}.json`, book.exportTrip())}>
                   Export this trip
