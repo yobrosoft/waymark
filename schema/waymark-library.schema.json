@@ -9,8 +9,8 @@
   "properties": {
     "schemaVersion": { "const": 1 },
     "kind": { "const": "waymark.library" },
-    "updatedAt": { "type": "string", "pattern": "^\\\\d{4}-\\\\d{2}-\\\\d{2}T\\\\d{2}:\\\\d{2}:\\\\d{2}(\\\\.\\\\d{1,3})?Z$" },
-    "exportedAt": { "type": "string", "pattern": "^\\\\d{4}-\\\\d{2}-\\\\d{2}T\\\\d{2}:\\\\d{2}:\\\\d{2}(\\\\.\\\\d{1,3})?Z$" },
+    "updatedAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$" },
+    "exportedAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$" },
     "activeTripId": { "type": ["string", "null"], "minLength": 1, "maxLength": 80 },
     "trips": {
       "type": "array",
@@ -26,7 +26,7 @@
       "properties": {
         "schemaVersion": { "const": 1 },
         "kind": { "const": "waymark.trip" },
-        "exportedAt": { "type": "string", "pattern": "^\\\\d{4}-\\\\d{2}-\\\\d{2}T\\\\d{2}:\\\\d{2}:\\\\d{2}(\\\\.\\\\d{1,3})?Z$" },
+        "exportedAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$" },
         "id": { "type": "string", "minLength": 1, "maxLength": 80 },
         "name": { "type": "string", "minLength": 1, "maxLength": 160 },
         "summary": { "type": "string", "maxLength": 2000 },
@@ -54,8 +54,8 @@
           "propertyNames": { "pattern": "^[^>]{1,80}>[^>]{1,80}$" },
           "additionalProperties": { "enum": ["driving", "walking", "cycling"] }
         },
-        "createdAt": { "type": "string", "pattern": "^\\\\d{4}-\\\\d{2}-\\\\d{2}T\\\\d{2}:\\\\d{2}:\\\\d{2}(\\\\.\\\\d{1,3})?Z$" },
-        "updatedAt": { "type": "string", "pattern": "^\\\\d{4}-\\\\d{2}-\\\\d{2}T\\\\d{2}:\\\\d{2}:\\\\d{2}(\\\\.\\\\d{1,3})?Z$" }
+        "createdAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$" },
+        "updatedAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$" }
       }
     },
     "day": {
@@ -64,7 +64,7 @@
       "required": ["id", "date", "title", "notes"],
       "properties": {
         "id": { "type": "string", "minLength": 1, "maxLength": 80 },
-        "date": { "type": "string", "pattern": "^\\\\d{4}-\\\\d{2}-\\\\d{2}$" },
+        "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
         "title": { "type": "string", "minLength": 1, "maxLength": 120 },
         "notes": { "type": "string", "maxLength": 2000 }
       }
