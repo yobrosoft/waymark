@@ -3,13 +3,13 @@ import { isSamePlace } from "@/lib/geo";
 import type { LegMode, Library, Place, Stop, Trip } from "@/lib/types";
 
 export const DAY_COLORS = [
-  "#1f4d4a",
-  "#c4563a",
-  "#a56b12",
-  "#2f6f68",
-  "#8c3d55",
-  "#3d5c38",
-  "#245c86",
+  "#007aff",
+  "#34c759",
+  "#ff9500",
+  "#af52de",
+  "#ff2d55",
+  "#5ac8fa",
+  "#5856d6",
 ];
 
 export function clampIndex(length: number, index: number): number {

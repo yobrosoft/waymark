@@ -7,9 +7,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
-  --font-heading: var(--font-fraunces), Georgia, serif;
+  --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,30 +49,30 @@
 }
 
 :root {
-  --background: oklch(0.962 0.012 85);
-  --foreground: oklch(0.24 0.02 55);
-  --card: oklch(0.985 0.008 90);
-  --card-foreground: oklch(0.24 0.02 55);
-  --popover: oklch(0.985 0.008 90);
-  --popover-foreground: oklch(0.24 0.02 55);
-  --primary: oklch(0.39 0.045 175);
-  --primary-foreground: oklch(0.97 0.01 90);
-  --secondary: oklch(0.93 0.018 80);
-  --secondary-foreground: oklch(0.28 0.02 55);
-  --muted: oklch(0.94 0.014 85);
-  --muted-foreground: oklch(0.46 0.02 60);
-  --accent: oklch(0.92 0.04 85);
-  --accent-foreground: oklch(0.28 0.03 55);
-  --destructive: oklch(0.53 0.15 35);
-  --border: oklch(0.88 0.018 80);
-  --input: oklch(0.88 0.018 80);
-  --ring: oklch(0.5 0.05 175);
+  --background: #f2f2f7;
+  --foreground: #1c1c1e;
+  --card: #ffffff;
+  --card-foreground: #1c1c1e;
+  --popover: #ffffff;
+  --popover-foreground: #1c1c1e;
+  --primary: #007aff;
+  --primary-foreground: #ffffff;
+  --secondary: #e5e5ea;
+  --secondary-foreground: #1c1c1e;
+  --muted: #f2f2f7;
+  --muted-foreground: #8e8e93;
+  --accent: #e5e5ea;
+  --accent-foreground: #1c1c1e;
+  --destructive: #ff3b30;
+  --border: rgb(60 60 67 / 12%);
+  --input: rgb(60 60 67 / 16%);
+  --ring: #007aff;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
+  --radius: 0.8rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -84,24 +84,24 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --background: #000000;
+  --foreground: #ffffff;
+  --card: #1c1c1e;
+  --card-foreground: #ffffff;
+  --popover: #2c2c2e;
+  --popover-foreground: #ffffff;
+  --primary: #0a84ff;
+  --primary-foreground: #ffffff;
+  --secondary: #2c2c2e;
+  --secondary-foreground: #ffffff;
+  --muted: #2c2c2e;
+  --muted-foreground: #8e8e93;
+  --accent: #2c2c2e;
+  --accent-foreground: #ffffff;
+  --destructive: #ff453a;
+  --border: rgb(255 255 255 / 12%);
+  --input: rgb(255 255 255 / 16%);
+  --ring: #0a84ff;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -123,6 +123,7 @@
   }
   body {
     @apply bg-background text-foreground font-sans;
+    letter-spacing: -0.011em;
   }
   html {
     @apply font-sans;
@@ -130,7 +131,9 @@
 }
 
 .font-heading {
-  font-family: var(--font-fraunces), Georgia, serif;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: -0.022em;
 }
 
 .waymark-shell {
@@ -183,14 +186,14 @@
   height: 1.7rem;
   min-width: 1.7rem;
   place-items: center;
-  border: 2px solid #fffdf8;
+  border: 2px solid #ffffff;
   border-radius: 999px 999px 999px 2px;
-  background: var(--pin, #1f4d4a);
-  color: #fffdf8;
+  background: var(--pin, #007aff);
+  color: #ffffff;
   font-size: 0.72rem;
   font-weight: 650;
   line-height: 1;
-  box-shadow: 0 1px 4px rgb(28 25 21 / 35%);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 25%);
   transform: rotate(-45deg);
   cursor: pointer;
 }
@@ -199,16 +202,16 @@
   height: 2.15rem;
   min-width: 2.15rem;
   font-size: 0.85rem;
-  outline: 3px solid #e2b15a;
+  outline: 3px solid #007aff;
 }
 
 .waymark-dot {
   width: 0.7rem;
   height: 0.7rem;
-  border: 2px solid #fffdf8;
+  border: 2px solid #ffffff;
   border-radius: 999px;
-  background: #245c86;
-  box-shadow: 0 1px 3px rgb(28 25 21 / 35%);
+  background: #007aff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 22%);
   cursor: pointer;
 }
 
@@ -231,6 +234,6 @@
 
 .gm-style .gm-style-iw-c {
   border-radius: 0.6rem;
-  font-family: var(--font-outfit), sans-serif;
-  color: #1e1a16;
+  font-family: var(--font-sans), sans-serif;
+  color: #1c1c1e;
 }

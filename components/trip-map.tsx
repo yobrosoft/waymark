@@ -27,9 +27,9 @@ const KEY_STORAGE = "waymark-google-maps-key";
 const ENV_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? "";
 
 const MODE_COLOR: Record<LegMode, string> = {
-  driving: "#c4563a",
-  walking: "#1f4d4a",
-  cycling: "#a56b12",
+  driving: "#007aff",
+  walking: "#34c759",
+  cycling: "#ff9500",
 };
 
 declare global {

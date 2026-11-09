@@ -49,5 +49,9 @@ next-env.d.ts
 # generated static site, map worker, and MCP bundle
 /out
 /dist
+
+# local Go API database
+/backend/*.db
+/backend/data/
 /public/maplibre-gl-worker.js
 /public/.nojekyll
