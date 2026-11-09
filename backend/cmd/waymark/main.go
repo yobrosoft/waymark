@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
@@ -8,7 +9,9 @@ import (
 	"strings"
 
 	"github.com/yobrosoft/waymark/backend/internal/api"
+	"github.com/yobrosoft/waymark/backend/internal/firestorestore"
 	"github.com/yobrosoft/waymark/backend/internal/sqlite"
+	"github.com/yobrosoft/waymark/backend/internal/store"
 )
 
 func main() {
@@ -18,22 +21,11 @@ func main() {
 	} else if listen := os.Getenv("WAYMARK_LISTEN"); listen != "" {
 		addr = listen
 	}
-	data := os.Getenv("WAYMARK_DATA_FILE")
-	if data == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			log.Fatal(err)
-		}
-		data = filepath.Join(home, ".local", "share", "waymark", "waymark.db")
-	}
-	if err := os.MkdirAll(filepath.Dir(data), 0o700); err != nil {
-		log.Fatal(err)
-	}
-	db, err := sqlite.Open(data)
+	db, closeStore, err := openStore()
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	defer closeStore()
 
 	origin := strings.TrimRight(os.Getenv("WAYMARK_PUBLIC_ORIGIN"), "/")
 	if origin == "" {
@@ -54,4 +46,33 @@ func main() {
 	}
 	log.Printf("listening on %s", addr)
 	log.Fatal(http.ListenAndServe(addr, server.Handler()))
+}
+
+func openStore() (store.Store, func(), error) {
+	if project := os.Getenv("WAYMARK_FIRESTORE_PROJECT"); project != "" {
+		ctx := context.Background()
+		db, err := firestorestore.Open(ctx, project)
+		if err != nil {
+			return nil, nil, err
+		}
+		log.Printf("store firestore project %s", project)
+		return db, func() { _ = db.Close() }, nil
+	}
+	data := os.Getenv("WAYMARK_DATA_FILE")
+	if data == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, nil, err
+		}
+		data = filepath.Join(home, ".local", "share", "waymark", "waymark.db")
+	}
+	if err := os.MkdirAll(filepath.Dir(data), 0o700); err != nil {
+		return nil, nil, err
+	}
+	db, err := sqlite.Open(data)
+	if err != nil {
+		return nil, nil, err
+	}
+	log.Printf("store sqlite %s", data)
+	return db, func() { _ = db.Close() }, nil
 }

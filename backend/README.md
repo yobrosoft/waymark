@@ -10,7 +10,18 @@ Vercel can run a Go HTTP server, and the free plan is enough for a small functio
 
 Use Google Cloud Run for the Go process and Firestore for the documents. Both have a free tier that covers a personal travel book: Cloud Run scales to zero, and Firestore’s free quota is 1 GiB with tens of thousands of reads and writes a day. No database server to patch.
 
-SQLite is the local store so the service runs with one file. Do not use that file on Cloud Run. A restart would drop the trips. The `store.Store` interface is what the Firestore adapter will implement.
+SQLite is the local store so the service runs with one file. Do not use that file on Cloud Run. A restart would drop the trips. Set `WAYMARK_FIRESTORE_PROJECT` to the Google Cloud project id and the process uses Firestore instead. The client also honors `FIRESTORE_EMULATOR_HOST`.
+
+On Cloud Run, give the service account Cloud Datastore User, and set:
+
+```text
+WAYMARK_FIRESTORE_PROJECT=your-project
+WAYMARK_PUBLIC_ORIGIN=https://your-service-url
+WAYMARK_ALLOW_SIGNUP=false
+WAYMARK_UI_ORIGINS=https://your-app
+```
+
+`PORT` is set by Cloud Run. From `backend/`, `gcloud run deploy waymark-api --source .` builds the Go module.
 
 ## Run locally
 
