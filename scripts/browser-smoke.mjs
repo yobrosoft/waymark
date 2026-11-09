@@ -34,10 +34,16 @@ async function run(width, height, label) {
   page.on("pageerror", (error) => logs.push(`${label} pageerror: ${error.message}`));
   await page.goto(base, { waitUntil: "networkidle2" });
   await page.waitForFunction(() => document.body.innerText.includes("Suvarnabhumi"));
-  const onFirst = await page.evaluate(() => document.body.innerText.includes("Stop 1 of 16"));
+  const onFirst = await page.evaluate(() => document.body.innerText.includes("Tue 8 Dec"));
   if (!onFirst) {
-    await page.click("button::-p-text(Reset)");
-    await page.waitForFunction(() => document.body.innerText.includes("Stop 1 of 16"));
+    for (let step = 0; step < 20; step += 1) {
+      const backDisabled = await page.evaluate(
+        () => [...document.querySelectorAll("button")].find((button) => button.textContent === "Back")?.disabled ?? true,
+      );
+      if (backDisabled) break;
+      await page.click("button::-p-text(Back)");
+      if (await page.evaluate(() => document.body.innerText.includes("Tue 8 Dec"))) break;
+    }
   }
   await page.waitForSelector(".gm-style", { timeout: 20000 });
   await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -98,8 +104,11 @@ async function run(width, height, label) {
     await page.waitForFunction(() => document.body.innerText.includes("Trip library"));
     await shot(page, "desktop-library");
     await page.keyboard.press("Escape");
-    await page.click("button::-p-text(Reset)");
-    await page.waitForFunction(() => document.body.innerText.includes("Stop 1 of 16"));
+    for (let step = 0; step < 20; step += 1) {
+      if (await page.evaluate(() => document.body.innerText.includes("Tue 8 Dec"))) break;
+      await page.click("button::-p-text(Back)");
+    }
+    await page.waitForFunction(() => document.body.innerText.includes("Tue 8 Dec"));
     await page.click("button::-p-text(Next)");
     await page.waitForFunction(() => /Typical drive time/.test(document.body.innerText));
     await page.setRequestInterception(true);

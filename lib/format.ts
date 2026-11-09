@@ -45,6 +45,16 @@ export function approximateTime(plannedTime: string): string {
 }
 
 /** Calendar nights from one date to a later date. Null when the dates are not a forward pair. */
+/** Evening, late, dinner, night, or a clock time from 19:00 through 05:59. */
+export function isNightTime(plannedTime: string): boolean {
+  const label = approximateTime(plannedTime);
+  if (/^\d{1,2}:\d{2}$/.test(label)) {
+    const hour = Number(label.split(":")[0]);
+    return hour >= 19 || hour < 6;
+  }
+  return label === "Evening" || label === "Late" || label === "Night" || label === "Dinner";
+}
+
 export function nightCount(earlier: string, later: string): number | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(earlier) || !/^\d{4}-\d{2}-\d{2}$/.test(later)) return null;
   const start = Date.parse(`${earlier}T00:00:00Z`);

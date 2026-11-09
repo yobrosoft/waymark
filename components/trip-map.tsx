@@ -21,8 +21,22 @@ interface TripMapProps {
   mode: LegMode;
   nearby: NearbyPlace[];
   camera: Camera | null;
+  night: boolean;
   onSelectLocation: (locationId: string) => void;
 }
+
+const NIGHT_STYLES: google.maps.MapTypeStyle[] = [
+  { elementType: "geometry", stylers: [{ color: "#1c1c1e" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#f2f2f7" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#1c1c1e" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#2c2c2e" }] },
+  { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#3a3a3c" }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#48484a" }] },
+  { featureType: "poi", elementType: "geometry", stylers: [{ color: "#2c2c2e" }] },
+  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#1e3a2f" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#0b2545" }] },
+  { featureType: "transit", elementType: "geometry", stylers: [{ color: "#2c2c2e" }] },
+];
 
 const KEY_STORAGE = "waymark-google-maps-key";
 const ENV_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? "";
@@ -56,6 +70,7 @@ function applyLine(
   stroke: google.maps.Polyline,
   line: LineStringGeometry | null,
   mode: LegMode,
+  night: boolean,
 ) {
   if (!line) {
     casing.setPath([]);
@@ -69,7 +84,13 @@ function applyLine(
   const dashed = mode !== "driving";
   casing.setPath(path);
   stroke.setPath(path);
-  casing.setOptions({ strokeColor: "#1c1915", strokeOpacity: 0.28, strokeWeight: 9, visible: true, zIndex: 1 });
+  casing.setOptions({
+    strokeColor: night ? "#f2f2f7" : "#1c1c1e",
+    strokeOpacity: night ? 0.45 : 0.28,
+    strokeWeight: 9,
+    visible: true,
+    zIndex: 1,
+  });
   stroke.setOptions(
     dashed
       ? {
@@ -89,7 +110,7 @@ function applyLine(
   );
 }
 
-export function TripMap({ places, line, mode, nearby, camera, onSelectLocation }: TripMapProps) {
+export function TripMap({ places, line, mode, nearby, camera, night, onSelectLocation }: TripMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const casingRef = useRef<google.maps.Polyline | null>(null);
@@ -254,8 +275,8 @@ export function TripMap({ places, line, mode, nearby, camera, onSelectLocation }
     const casing = casingRef.current;
     const stroke = strokeRef.current;
     if (!casing || !stroke || !ready) return;
-    applyLine(casing, stroke, line, mode);
-  }, [line, mode, ready]);
+    applyLine(casing, stroke, line, mode, night);
+  }, [line, mode, night, ready]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -353,6 +374,12 @@ export function TripMap({ places, line, mode, nearby, camera, onSelectLocation }
       if (zoom != null && zoom > maxZoom) map.setZoom(maxZoom);
     });
   }, [camera, ready]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+    map.setOptions({ colorScheme: night ? "DARK" : "LIGHT", styles: night ? NIGHT_STYLES : [] });
+  }, [night, ready]);
 
   function saveKey(event: FormEvent) {
     event.preventDefault();

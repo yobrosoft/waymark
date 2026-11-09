@@ -139,19 +139,27 @@
 .waymark-shell {
   display: grid;
   height: 100dvh;
-  grid-template-rows: auto minmax(12rem, 1fr) minmax(11.5rem, 46dvh);
+  grid-template-rows: auto minmax(0, 1fr);
   grid-template-areas:
-    "header"
-    "map"
-    "panel";
+    "banner"
+    "map";
 }
 
-.waymark-shell[data-plan="expanded"] {
-  grid-template-rows: auto minmax(8rem, 0.34fr) minmax(0, 1fr);
+.waymark-banner {
+  grid-area: banner;
+  background: rgb(242 242 247 / 92%);
+  color: #1c1c1e;
 }
 
-.waymark-header {
-  grid-area: header;
+.waymark-shell[data-night="true"] .waymark-banner {
+  background: rgb(28 28 30 / 94%);
+  color: #f2f2f7;
+  border-color: #3a3a3c;
+}
+
+.waymark-shell[data-night="true"] .waymark-banner button.border-border,
+.waymark-shell[data-night="true"] .waymark-route button.border-border {
+  color: #1c1c1e;
 }
 
 .waymark-map {
@@ -159,21 +167,14 @@
   min-height: 0;
 }
 
-.waymark-panel {
-  grid-area: panel;
-  min-width: 0;
-  min-height: 0;
+.waymark-route {
+  background: rgb(255 255 255 / 94%);
+  color: #1c1c1e;
 }
 
-@media (min-width: 960px) {
-  .waymark-shell,
-  .waymark-shell[data-plan="expanded"] {
-    grid-template-columns: minmax(22rem, 28rem) minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-    grid-template-areas:
-      "header header"
-      "panel map";
-  }
+.waymark-shell[data-night="true"] .waymark-route {
+  background: rgb(28 28 30 / 92%);
+  color: #f2f2f7;
 }
 
 .waymark-dialog {
