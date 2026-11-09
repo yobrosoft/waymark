@@ -1,5 +1,6 @@
 import { legKey } from "@/lib/ids";
 import { isSamePlace } from "@/lib/geo";
+import { classifyPlace, placeKindLabel, type PlaceKind } from "@/lib/place-kind";
 import type { LegMode, Library, Place, Stop, Trip } from "@/lib/types";
 
 export const DAY_COLORS = [
@@ -104,6 +105,8 @@ export interface MapPlace {
   color: string;
   selected: boolean;
   badge: string;
+  kind: PlaceKind;
+  kindLabel: string;
   aria: string;
 }
 
@@ -123,6 +126,14 @@ export function mapPlaces(trip: Trip, index: number): MapPlace[] {
     const selected = visits.includes(index);
     const shown = selected ? index : visits[0];
     const color = DAY_COLORS[(dayIndex.get(trip.stops[shown].dayId) ?? 0) % DAY_COLORS.length];
+    const notes = visits.map((visit) => `${trip.stops[visit].notes} ${trip.stops[visit].access}`).join(" ");
+    const kind = classifyPlace({
+      name: place.name,
+      address: place.address,
+      pinNote: place.pinNote,
+      notes,
+    });
+    const kindLabel = placeKindLabel(kind);
     markers.push({
       locationId,
       name: place.name,
@@ -132,8 +143,10 @@ export function mapPlaces(trip: Trip, index: number): MapPlace[] {
       color,
       selected,
       badge: String(shown + 1),
-      aria: `${place.name}. Stop ${shown + 1}${
-        visits.length > 1 ? `. ${visits.length} visits on this trip` : ""
+      kind,
+      kindLabel,
+      aria: `${place.name}, ${kindLabel}. Stop ${shown + 1}${
+        visits.length > 1 ? `, ${visits.length} visits on this trip` : ""
       }`,
     });
   }

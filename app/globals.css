@@ -182,36 +182,110 @@
 }
 
 .waymark-pin {
-  display: grid;
-  height: 1.7rem;
-  min-width: 1.7rem;
-  place-items: center;
-  border: 2px solid #ffffff;
-  border-radius: 999px 999px 999px 2px;
-  background: var(--pin, #007aff);
-  color: #ffffff;
-  font-size: 0.72rem;
-  font-weight: 650;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #1c1c1e;
+  font: inherit;
   line-height: 1;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 25%);
-  transform: rotate(-45deg);
   cursor: pointer;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 28%));
 }
 
-.waymark-pin.is-selected {
-  height: 2.15rem;
-  min-width: 2.15rem;
-  font-size: 0.85rem;
-  outline: 3px solid #007aff;
+.waymark-pin-body {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 12.5rem;
+  height: 2rem;
+  padding: 0.15rem 0.55rem 0.15rem 0.15rem;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 8%);
+}
+
+.waymark-pin.is-selected .waymark-pin-body {
+  max-width: 16rem;
+  height: 2.25rem;
+  box-shadow: inset 0 0 0 2px var(--pin, #007aff);
+}
+
+.waymark-pin-icon {
+  display: grid;
+  width: 1.7rem;
+  height: 1.7rem;
+  flex: none;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--pin, #007aff);
+  color: #ffffff;
+}
+
+.waymark-pin.is-selected .waymark-pin-icon {
+  width: 1.9rem;
+  height: 1.9rem;
+}
+
+.waymark-pin-icon svg,
+.waymark-dot svg {
+  display: block;
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.waymark-pin-num {
+  flex: none;
+  color: #8e8e93;
+  font-size: 0.68rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.waymark-pin-name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: -0.011em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.waymark-pin-tail {
+  width: 0;
+  height: 0;
+  margin-top: -1px;
+  margin-left: calc(1rem - 6px);
+  border-right: 6px solid transparent;
+  border-left: 6px solid transparent;
+  border-top: 7px solid #ffffff;
+}
+
+.waymark-map.is-compact .waymark-pin:not(.is-selected) .waymark-pin-name,
+.waymark-map.is-compact .waymark-pin:not(.is-selected) .waymark-pin-num {
+  display: none;
+}
+
+.waymark-map.is-compact .waymark-pin:not(.is-selected) .waymark-pin-body {
+  max-width: none;
+  padding-right: 0.15rem;
 }
 
 .waymark-dot {
-  width: 0.7rem;
-  height: 0.7rem;
+  display: grid;
+  width: 1.65rem;
+  height: 1.65rem;
+  place-items: center;
+  padding: 0;
   border: 2px solid #ffffff;
   border-radius: 999px;
-  background: #007aff;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 22%);
+  background: #1c1c1e;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
   cursor: pointer;
 }
 
@@ -220,16 +294,11 @@
 }
 
 .waymark-marker[data-anchor="bottom"] {
-  transform: translate(-50%, -100%);
+  transform: translate(-1rem, -100%);
 }
 
 .waymark-marker[data-anchor="center"] {
   transform: translate(-50%, -50%);
-}
-
-.waymark-pin span {
-  display: block;
-  transform: rotate(45deg);
 }
 
 .gm-style .gm-style-iw-c {

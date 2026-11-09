@@ -5,6 +5,7 @@ import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GOOGLE_MAPS_KEY_URL } from "@/lib/providers";
+import { classifyPlace, placeIconSvg } from "@/lib/place-kind";
 import type { MapPlace } from "@/lib/trip-logic";
 import type { LegMode, LineStringGeometry, NearbyPlace } from "@/lib/types";
 
@@ -196,6 +197,13 @@ export function TripMap({ places, line, mode, nearby, camera, onSelectLocation }
             this.wrapper.remove();
           }
         }
+        const compactPins = () => {
+          const zoom = map.getZoom() ?? 0;
+          container.classList.toggle("is-compact", zoom < 13);
+        };
+        map.addListener("zoom_changed", compactPins);
+        map.addListener("idle", compactPins);
+        compactPins();
         mapRef.current = map;
         casingRef.current = casing;
         strokeRef.current = stroke;
@@ -227,6 +235,8 @@ export function TripMap({ places, line, mode, nearby, camera, onSelectLocation }
       observer.disconnect();
       markersRef.current.forEach((marker) => marker.setMap(null));
       markersRef.current = [];
+      const map = mapRef.current;
+      if (map) google.maps.event.clearInstanceListeners(map);
       casingRef.current?.setMap(null);
       strokeRef.current?.setMap(null);
       infoRef.current?.close();
@@ -258,15 +268,29 @@ export function TripMap({ places, line, mode, nearby, camera, onSelectLocation }
       const wrapper = document.createElement("div");
       wrapper.className = "waymark-marker";
       wrapper.dataset.anchor = "bottom";
-      if (place.selected) wrapper.style.zIndex = "2";
+      wrapper.style.zIndex = place.selected ? "4" : "1";
       const button = document.createElement("button");
       button.type = "button";
       button.className = `waymark-pin${place.selected ? " is-selected" : ""}`;
       button.style.setProperty("--pin", place.color);
-      const label = document.createElement("span");
-      label.textContent = place.badge;
-      button.append(label);
+      button.title = `${place.kindLabel} · ${place.name}`;
       button.setAttribute("aria-label", place.aria);
+      const body = document.createElement("span");
+      body.className = "waymark-pin-body";
+      const icon = document.createElement("span");
+      icon.className = "waymark-pin-icon";
+      icon.innerHTML = placeIconSvg(place.kind);
+      const number = document.createElement("span");
+      number.className = "waymark-pin-num";
+      number.textContent = place.badge;
+      const name = document.createElement("span");
+      name.className = "waymark-pin-name";
+      name.textContent = place.name;
+      body.append(icon, number, name);
+      const tail = document.createElement("span");
+      tail.className = "waymark-pin-tail";
+      tail.setAttribute("aria-hidden", "true");
+      button.append(body, tail);
       button.addEventListener("click", (event) => {
         event.stopPropagation();
         onSelectRef.current(place.locationId);
@@ -282,7 +306,9 @@ export function TripMap({ places, line, mode, nearby, camera, onSelectLocation }
       wrapper.dataset.anchor = "center";
       const button = document.createElement("button");
       button.type = "button";
+      const nearbyKind = classifyPlace({ name: place.kind.replaceAll("_", " ") });
       button.className = "waymark-dot";
+      button.innerHTML = placeIconSvg(nearbyKind);
       button.setAttribute("aria-label", `${place.name}, ${place.kind}`);
       button.addEventListener("click", (event) => {
         event.stopPropagation();
@@ -320,7 +346,7 @@ export function TripMap({ places, line, mode, nearby, camera, onSelectLocation }
     if (camera.points.length === 0) return;
     const bounds = new google.maps.LatLngBounds();
     for (const [lon, lat] of camera.points) bounds.extend({ lat, lng: lon });
-    map.fitBounds(bounds, { top: 56, right: 48, bottom: 56, left: 48 });
+    map.fitBounds(bounds, { top: 64, right: 72, bottom: 56, left: 48 });
     const maxZoom = camera.maxZoom ?? 15;
     google.maps.event.addListenerOnce(map, "bounds_changed", () => {
       const zoom = map.getZoom();
@@ -366,7 +392,7 @@ export function TripMap({ places, line, mode, nearby, camera, onSelectLocation }
 
   return (
     <div className="relative h-full min-h-64">
-      <div ref={containerRef} className="h-full w-full" role="application" aria-label="Google map" />
+      <div ref={containerRef} className="waymark-map h-full w-full" role="application" aria-label="Google map" />
       {configReady && !key ? (
         <form
           className="absolute inset-0 z-20 grid place-items-center bg-background/85 p-4"
