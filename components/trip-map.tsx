@@ -22,6 +22,7 @@ interface TripMapProps {
   nearby: NearbyPlace[];
   camera: Camera | null;
   night: boolean;
+  active: boolean;
   onSelectLocation: (locationId: string) => void;
 }
 
@@ -110,7 +111,7 @@ function applyLine(
   );
 }
 
-export function TripMap({ places, line, mode, nearby, camera, night, onSelectLocation }: TripMapProps) {
+export function TripMap({ places, line, mode, nearby, camera, night, active, onSelectLocation }: TripMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const casingRef = useRef<google.maps.Polyline | null>(null);
@@ -355,7 +356,8 @@ export function TripMap({ places, line, mode, nearby, camera, night, onSelectLoc
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready || !camera) return;
+    if (!map || !ready || !active || !camera) return;
+    google.maps.event.trigger(map, "resize");
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (camera.type === "point") {
       const center = { lat: camera.lat, lng: camera.lon };
@@ -373,7 +375,7 @@ export function TripMap({ places, line, mode, nearby, camera, night, onSelectLoc
       const zoom = map.getZoom();
       if (zoom != null && zoom > maxZoom) map.setZoom(maxZoom);
     });
-  }, [camera, ready]);
+  }, [active, camera, ready]);
 
   useEffect(() => {
     const map = mapRef.current;

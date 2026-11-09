@@ -4,17 +4,21 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AccountGate } from "@/components/account-gate";
 import { AgentBar } from "@/components/agent-bar";
-import { HelpDialog, LibraryDialog, StopEditor, TripEditor } from "@/components/dialogs";
+import { ConfirmDelete, HelpDialog, LibraryDialog, StopEditor, TripEditor } from "@/components/dialogs";
 import { useAgentLink } from "@/components/use-agent-link";
 import { downloadJson } from "@/components/download";
 import { TripMap, type Camera, type CameraSpec } from "@/components/trip-map";
+import { TripTimeline } from "@/components/trip-timeline";
 import { useTripBook } from "@/components/use-trip-book";
 import { approximateTime, formatDay, formatDistance, formatDuration, formatWhen, isNightTime, MODE_LABEL } from "@/lib/format";
 import { createShareLink } from "@/lib/account";
+import { resolveNearby } from "@/lib/lookups";
 import { googleDirectionsUrl } from "@/lib/providers";
 import { resolveRoute, routeLine } from "@/lib/routing";
 import {
+  deleteStop,
   mapPlaces,
+  moveStop,
   placesById,
   selectedLeg,
   selectPinIndex,
@@ -22,7 +26,7 @@ import {
   stepIndex,
   type StopDraft,
 } from "@/lib/trip-logic";
-import type { LegMode, RouteView, Stop } from "@/lib/types";
+import type { LegMode, NearbyCategory, NearbyPlace, RouteView, Stop } from "@/lib/types";
 
 const MODES: LegMode[] = ["driving", "walking", "cycling"];
 
@@ -80,6 +84,15 @@ export function Planner() {
   const [stopEditorOpen, setStopEditorOpen] = useState(false);
   const [stopDraft, setStopDraft] = useState<StopDraft | null>(null);
   const [insertAt, setInsertAt] = useState<number | null>(null);
+  const [deleteStopId, setDeleteStopId] = useState<string | null>(null);
+  const [nearbyCategory, setNearbyCategory] = useState<NearbyCategory | null>(null);
+  const [nearby, setNearby] = useState<
+    | { status: "idle" }
+    | { status: "loading" }
+    | { status: "ready"; places: NearbyPlace[]; fromCache: boolean }
+    | { status: "error"; message: string }
+  >({ status: "idle" });
+  const [view, setView] = useState<"map" | "timeline">("map");
   const [otherOpen, setOtherOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -185,7 +198,27 @@ export function Planner() {
 
   useEffect(() => {
     setOtherOpen(false);
+    setNearby({ status: "idle" });
+    setNearbyCategory(null);
   }, [trip?.id, index]);
+
+  async function loadNearby(category: NearbyCategory) {
+    if (!place) return;
+    setNearbyCategory(category);
+    setNearby({ status: "loading" });
+    const result = await resolveNearby({
+      category,
+      lat: place.lat,
+      lon: place.lon,
+      cacheGet: (key) => bookRef.current.nearbyCacheGet(key),
+      cacheSet: (key, value) => bookRef.current.nearbyCacheSet(key, value),
+    });
+    if (!result.ok) {
+      setNearby({ status: "error", message: result.error === "cancelled" ? "Nearby search was cancelled." : result.error });
+      return;
+    }
+    setNearby({ status: "ready", places: result.places, fromCache: result.fromCache });
+  }
 
   if (book.status === "signed-out") {
     return <AccountGate warning={book.warning} onToken={book.signIn} />;
@@ -240,6 +273,15 @@ export function Planner() {
   const dayLabel = day ? `${formatDay(day.date)} · ${day.title}` : trip?.name ?? "No trip open";
   const when = stop ? approximateTime(stop.plannedTime) : "";
 
+  async function reorder(stopIndex: number, direction: -1 | 1) {
+    if (!trip) return;
+    const currentId = trip.stops[index]?.id;
+    const next = moveStop(trip, stopIndex, direction, new Date().toISOString());
+    if (next === trip) return;
+    const nextIndex = currentId ? next.stops.findIndex((item) => item.id === currentId) : index;
+    await book.commitTrip(next, nextIndex < 0 ? 0 : nextIndex);
+  }
+
   function editCurrentStop() {
     if (!trip || !stop) return;
     const itemDay = trip.days.find((candidate) => candidate.id === stop.dayId) ?? trip.days[0];
@@ -266,6 +308,20 @@ export function Planner() {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <div className="flex rounded-full bg-black/10 p-0.5" role="group" aria-label="Choose map or timeline">
+            <Button type="button" size="sm" variant={view === "map" ? "default" : "outline"} aria-pressed={view === "map"} onClick={() => setView("map")}>
+              Map
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={view === "timeline" ? "default" : "outline"}
+              aria-pressed={view === "timeline"}
+              onClick={() => setView("timeline")}
+            >
+              Timeline
+            </Button>
+          </div>
           <Button
             type="button"
             variant="outline"
@@ -354,13 +410,15 @@ export function Planner() {
       ) : null}
       </div>
 
-      <section className={`waymark-map relative min-h-0 ${night ? "bg-[#1c1c1e]" : "bg-[#e5e5ea]"}`} aria-label="Map">
+      <section className="waymark-map relative min-h-0">
+        <div className={view === "map" ? `relative h-full min-h-0 ${night ? "bg-[#1c1c1e]" : "bg-[#e5e5ea]"}` : "hidden"} hidden={view !== "map"}>
         <TripMap
           places={markers}
           line={line}
           mode={leg?.mode ?? "driving"}
-          nearby={[]}
+          nearby={nearby.status === "ready" ? nearby.places : []}
           night={night}
+          active={view === "map"}
           camera={camera}
           onSelectLocation={(locationId) => {
             if (!trip) return;
@@ -453,6 +511,66 @@ export function Planner() {
           <p className="absolute inset-x-3 top-3 z-10 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-950 shadow">{warnings[0]}</p>
         ) : null}
         {notice ? <p className="absolute inset-x-3 top-3 z-10 rounded-xl bg-card px-3 py-2 text-xs shadow">{notice}</p> : null}
+        </div>
+        <div
+          className={view === "timeline" ? "h-full min-h-0 overflow-y-auto bg-background px-3 py-3" : "hidden"}
+          hidden={view !== "timeline"}
+        >
+          {warnings.slice(0, 2).map((warning) => (
+            <p key={warning} className="mb-2 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-950">
+              {warning}
+            </p>
+          ))}
+          {!trip ? (
+            <div className="grid max-w-sm gap-3">
+              <h1 className="font-heading text-2xl">{book.accountMode ? "No trip in this account" : "No trip in this browser"}</h1>
+              <Button type="button" onClick={() => setLibraryOpen(true)}>
+                Open the library
+              </Button>
+            </div>
+          ) : trip.stops.length === 0 ? (
+            <section className="rounded-xl border border-dashed p-4">
+              <h2 className="font-heading text-xl">This trip has no stops</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Search for a real place, or type coordinates. A blank pin is not added for you.</p>
+              <Button
+                type="button"
+                className="mt-3"
+                onClick={() => {
+                  setStopDraft(emptyDraft(trip.days[0].id));
+                  setInsertAt(0);
+                  setStopEditorOpen(true);
+                }}
+              >
+                Add the first stop
+              </Button>
+            </section>
+          ) : (
+            <TripTimeline
+              trip={trip}
+              index={index}
+              places={places}
+              onSelect={(stopIndex) => book.setIndex(stopIndex)}
+              onEdit={(stopIndex) => {
+                const item = trip.stops[stopIndex];
+                const itemDay = trip.days.find((candidate) => candidate.id === item.dayId) ?? trip.days[0];
+                setStopDraft(draftFromStop(item, places, itemDay.id));
+                setInsertAt(null);
+                setStopEditorOpen(true);
+              }}
+              onAddAfter={(stopIndex) => {
+                const item = trip.stops[stopIndex];
+                setStopDraft(emptyDraft(item.dayId || trip.days[0].id));
+                setInsertAt(stopIndex + 1);
+                setStopEditorOpen(true);
+              }}
+              onRemove={(stopId) => setDeleteStopId(stopId)}
+              onMove={(stopIndex, direction) => void reorder(stopIndex, direction)}
+              nearbyCategory={nearbyCategory}
+              nearby={nearby}
+              onNearby={(category) => void loadNearby(category)}
+            />
+          )}
+        </div>
       </section>
 
 
@@ -491,6 +609,20 @@ export function Planner() {
           onSave={(next, nextIndex) => book.commitTrip(next, nextIndex)}
         />
       ) : null}
+      <ConfirmDelete
+        open={deleteStopId != null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteStopId(null);
+        }}
+        title="Remove this stop?"
+        body="The place stays in the trip so you can use it again. This only changes the order saved in this browser."
+        onConfirm={() => {
+          if (!trip || !deleteStopId) return;
+          const next = deleteStop(trip, deleteStopId, new Date().toISOString());
+          const nextIndex = Math.max(0, Math.min(index, next.stops.length - 1));
+          void book.commitTrip(next, next.stops.length ? nextIndex : 0);
+        }}
+      />
     </div>
   );
 }
