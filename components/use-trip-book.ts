@@ -25,10 +25,21 @@ import {
   ROUTE_CACHE_KEY,
   type KeyValueStore,
 } from "@/lib/storage";
+import {
+  API_URL,
+  accountToken,
+  fetchAccountTrip,
+  loadAccountLibrary,
+  loadSharedTrip,
+  setAccountToken,
+  shareTokenFromLocation,
+  syncAccountLibrary,
+} from "@/lib/account";
 import { clampIndex, setLegMode } from "@/lib/trip-logic";
 import type { GeocodeHit, LegMode, Library, NearbyPlace, RoutePayload, Trip } from "@/lib/types";
 
 const UI_KEY = "waymark-ui-v1";
+const ACTIVE_KEY = "waymark-active-trip";
 const ROUTE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const LOOKUP_TTL_MS = 12 * 60 * 60 * 1000;
 
@@ -63,15 +74,96 @@ function writeIndex(tripId: string, index: number) {
   }
 }
 
+function readActive(): string | null {
+  try {
+    return window.localStorage.getItem(ACTIVE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeActive(tripId: string | null) {
+  try {
+    if (tripId) window.localStorage.setItem(ACTIVE_KEY, tripId);
+    else window.localStorage.removeItem(ACTIVE_KEY);
+  } catch {
+    /* Choosing a trip still works for this page load. */
+  }
+}
+
 export function useTripBook() {
-  const [status, setStatus] = useState<"loading" | "ready" | "blocked">("loading");
+  const [status, setStatus] = useState<"loading" | "ready" | "blocked" | "signed-out">("loading");
   const [library, setLibrary] = useState<Library | null>(null);
   const [block, setBlock] = useState<BlockInfo | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [index, setIndexState] = useState(0);
+  const [readonly, setReadonly] = useState(false);
   const storeRef = useRef<KeyValueStore | null>(null);
+  const libraryRef = useRef<Library | null>(null);
+  const savingRef = useRef(false);
+  const accountMode = Boolean(API_URL);
+
+  async function openAccount(token: string) {
+    setAccountToken(token);
+    setReadonly(false);
+    setStatus("loading");
+    try {
+      const next = await loadAccountLibrary(readActive());
+      libraryRef.current = next;
+      setLibrary(next);
+      const chosen = next.trips.find((item) => item.id === next.activeTripId) ?? next.trips[0];
+      setIndexState(chosen ? clampIndex(chosen.stops.length, readIndex(chosen.id)) : 0);
+      setStatus("ready");
+    } catch (err) {
+      setAccountToken(null);
+      setWarning(err instanceof Error ? err.message : "The account could not be opened.");
+      setStatus("signed-out");
+    }
+  }
 
   useEffect(() => {
+    if (!accountMode) return;
+    let cancel = false;
+    (async () => {
+      const share = shareTokenFromLocation();
+      if (share) {
+        try {
+          const shared = await loadSharedTrip(share);
+          if (cancel) return;
+          const next: Library = {
+            schemaVersion: 1,
+            kind: "waymark.library",
+            updatedAt: new Date().toISOString(),
+            activeTripId: shared.id,
+            trips: [shared],
+          };
+          libraryRef.current = next;
+          setLibrary(next);
+          setReadonly(true);
+          setIndexState(clampIndex(shared.stops.length, readIndex(shared.id)));
+          setStatus("ready");
+        } catch (err) {
+          if (cancel) return;
+          setWarning(err instanceof Error ? err.message : "This share link does not match a trip.");
+          setStatus(accountToken() ? "loading" : "signed-out");
+          if (accountToken()) void openAccount(accountToken()!);
+        }
+        return;
+      }
+      const token = accountToken();
+      if (!token) {
+        if (!cancel) setStatus("signed-out");
+        return;
+      }
+      await openAccount(token);
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [accountMode]);
+
+  useEffect(() => {
+    if (accountMode) return;
     let cancel = false;
     (async () => {
       let store: KeyValueStore = idbStore;
@@ -93,6 +185,7 @@ export function useTripBook() {
         setStatus("blocked");
         return;
       }
+      libraryRef.current = result.library;
       setLibrary(result.library);
       const trip =
         result.library.trips.find((item) => item.id === result.library.activeTripId) ??
@@ -104,19 +197,34 @@ export function useTripBook() {
     return () => {
       cancel = true;
     };
-  }, []);
+  }, [accountMode]);
 
   const trip =
     library?.trips.find((item) => item.id === library.activeTripId) ?? library?.trips[0] ?? null;
 
   const persist = useCallback(async (next: Library) => {
+    const previous = libraryRef.current;
+    libraryRef.current = next;
     setLibrary(next);
+    writeActive(next.activeTripId);
+    if (accountMode) {
+      if (readonly) return;
+      savingRef.current = true;
+      try {
+        await syncAccountLibrary(previous, next);
+      } catch (err) {
+        setWarning(err instanceof Error ? err.message : "The account could not be saved.");
+      } finally {
+        savingRef.current = false;
+      }
+      return;
+    }
     try {
       await storeRef.current?.set(LIBRARY_KEY, next);
     } catch {
       setWarning("Could not save to this browser. Export a backup before you leave.");
     }
-  }, []);
+  }, [accountMode, readonly]);
 
   const setIndex = useCallback(
     (next: number | ((current: number) => number)) => {
@@ -134,6 +242,7 @@ export function useTripBook() {
   const commitTrip = useCallback(
     async (nextTrip: Trip, nextIndex?: number) => {
       if (!library) return ["The trip book is not open yet."];
+      if (readonly) return ["This is a shared view. It was not changed."];
       const issues = integrityIssues(nextTrip);
       if (issues.length) return issues;
       const next = saveTrip(library, nextTrip, new Date().toISOString());
@@ -141,8 +250,32 @@ export function useTripBook() {
       if (nextIndex != null) setIndex(nextIndex);
       return null;
     },
-    [library, persist, setIndex],
+    [library, persist, readonly, setIndex],
   );
+
+  useEffect(() => {
+    if (!accountMode || readonly || status !== "ready" || !trip) return;
+    const tripId = trip.id;
+    const seen = trip.updatedAt;
+    const timer = window.setInterval(() => {
+      if (savingRef.current) return;
+      void fetchAccountTrip(tripId)
+        .then((remote) => {
+          if (!remote || remote.updatedAt <= seen) return;
+          const current = libraryRef.current;
+          if (!current) return;
+          const next = {
+            ...current,
+            trips: current.trips.map((item) => (item.id === remote.id ? remote : item)),
+            updatedAt: remote.updatedAt,
+          };
+          libraryRef.current = next;
+          setLibrary(next);
+        })
+        .catch(() => undefined);
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [accountMode, readonly, status, trip]);
 
   const selectTrip = useCallback(
     async (tripId: string) => {
@@ -163,7 +296,19 @@ export function useTripBook() {
     index,
     warning,
     block,
+    readonly,
+    accountMode,
     dismissWarning: () => setWarning(null),
+    signOut() {
+      setAccountToken(null);
+      libraryRef.current = null;
+      setLibrary(null);
+      setReadonly(false);
+      setStatus("signed-out");
+    },
+    async signIn(token: string) {
+      await openAccount(token.trim());
+    },
     setIndex,
     async setMode(mode: LegMode) {
       if (!trip) return;

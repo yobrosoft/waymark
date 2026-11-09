@@ -76,6 +76,15 @@ func TestAccountTripShareAndMCP(t *testing.T) {
 		t.Fatalf("broken trip %d %s", rejected.Code, rejected.Body.String())
 	}
 
+	removed := call(t, handler, http.MethodDelete, "/v1/trips/trip-one", owner.token, nil)
+	if removed.Code != http.StatusOK {
+		t.Fatalf("delete %d %s", removed.Code, removed.Body.String())
+	}
+	gone := call(t, handler, http.MethodGet, shared.Path, "", nil)
+	if gone.Code != http.StatusNotFound {
+		t.Fatalf("share survived delete: %d", gone.Code)
+	}
+
 	bad := call(t, handler, http.MethodPost, "/oauth/register", "", map[string]any{
 		"redirect_uris": []string{"https://evil.example/steal"},
 	})

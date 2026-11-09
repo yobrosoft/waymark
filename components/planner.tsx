@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { AccountGate } from "@/components/account-gate";
 import { AgentBar } from "@/components/agent-bar";
 import { ConfirmDelete, HelpDialog, LibraryDialog, StopEditor, TripEditor } from "@/components/dialogs";
 import { useAgentLink } from "@/components/use-agent-link";
@@ -10,6 +11,7 @@ import { TripMap, type Camera, type CameraSpec } from "@/components/trip-map";
 import { TripTimeline } from "@/components/trip-timeline";
 import { useTripBook } from "@/components/use-trip-book";
 import { formatDistance, formatDuration, formatWhen, MODE_LABEL } from "@/lib/format";
+import { createShareLink } from "@/lib/account";
 import { slugify } from "@/lib/ids";
 import { resolveNearby } from "@/lib/lookups";
 import { googleDirectionsUrl } from "@/lib/providers";
@@ -93,6 +95,7 @@ export function Planner() {
     | { status: "error"; message: string }
   >({ status: "idle" });
   const [otherOpen, setOtherOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const savedTrip = book.trip;
   const link = useAgentLink(savedTrip);
@@ -218,10 +221,16 @@ export function Planner() {
     setNearby({ status: "ready", places: result.places, fromCache: result.fromCache });
   }
 
+  if (book.status === "signed-out") {
+    return <AccountGate warning={book.warning} onToken={book.signIn} />;
+  }
+
   if (book.status === "loading") {
     return (
       <main className="grid min-h-dvh place-items-center bg-background px-6">
-        <p className="max-w-sm text-center text-muted-foreground">Opening the trip book saved in this browser…</p>
+        <p className="max-w-sm text-center text-muted-foreground">
+          {book.accountMode ? "Opening the trips in this account…" : "Opening the trip book saved in this browser…"}
+        </p>
       </main>
     );
   }
@@ -266,12 +275,34 @@ export function Planner() {
       <header className="waymark-header flex items-center justify-between gap-3 border-b bg-background/90 px-3 py-2 backdrop-blur-xl sm:px-4">
         <div className="min-w-0">
           <p className="font-heading text-lg leading-none">Waymark</p>
-          <p className="truncate text-xs text-muted-foreground">Trips stay in this browser</p>
+          <p className="truncate text-xs text-muted-foreground">
+            {book.readonly ? "Shared view" : book.accountMode ? "Trips in this account" : "Trips stay in this browser"}
+          </p>
         </div>
         <div className="hidden min-w-0 text-center sm:block">
           <p className="truncate font-heading text-base">{trip?.name ?? "No trip open"}</p>
         </div>
         <div className="flex shrink-0 gap-2">
+          {book.accountMode && !book.readonly && trip ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void createShareLink(trip.id)
+                  .then((token) => navigator.clipboard.writeText(`${window.location.origin}/?share=${token}`))
+                  .then(() => setNotice("View link copied."))
+                  .catch((err: unknown) => setNotice(err instanceof Error ? err.message : "The share link was not created."));
+              }}
+            >
+              Share
+            </Button>
+          ) : null}
+          {book.accountMode && !book.readonly ? (
+            <Button type="button" variant="ghost" size="sm" onClick={book.signOut}>
+              Sign out
+            </Button>
+          ) : null}
           <Button type="button" variant="outline" size="sm" onClick={() => setLibraryOpen(true)}>
             Library
           </Button>
@@ -296,18 +327,26 @@ export function Planner() {
       </section>
 
       <aside className="waymark-panel flex min-h-0 flex-col border-t bg-card lg:border-t-0 lg:border-r" aria-label="Trip plan">
-        <AgentBar
-          trip={savedTrip}
-          link={link}
-          onApplied={(next, index) => book.commitTrip(next, index)}
-          onOpenShared={async (tripId) => {
-            const shared = await link.fetchTrip(tripId);
-            if (!shared) return;
-            const message = await book.importTrips([shared], "replace");
-            if (message) return;
-            await book.selectTrip(tripId);
-          }}
-        />
+        {book.accountMode ? (
+          <p className="border-b px-3 py-2 text-sm text-muted-foreground">
+            {book.readonly
+              ? "This is a shared view. Changes are not saved."
+              : notice || "An agent signed in with your account token can update these trips."}
+          </p>
+        ) : (
+          <AgentBar
+            trip={savedTrip}
+            link={link}
+            onApplied={(next, index) => book.commitTrip(next, index)}
+            onOpenShared={async (tripId) => {
+              const shared = await link.fetchTrip(tripId);
+              if (!shared) return;
+              const message = await book.importTrips([shared], "replace");
+              if (message) return;
+              await book.selectTrip(tripId);
+            }}
+          />
+        )}
         <div className={`flex min-h-0 flex-1 flex-col ${link.preview ? "pointer-events-none opacity-60" : ""}`}>
         {book.warning ? (
           <div className="flex items-start justify-between gap-2 border-b bg-amber-50 px-3 py-2 text-sm text-amber-950">
@@ -319,9 +358,11 @@ export function Planner() {
         ) : null}
         {!trip ? (
           <div className="grid gap-3 p-4">
-            <h1 className="font-heading text-2xl">No trip in this browser</h1>
+            <h1 className="font-heading text-2xl">{book.accountMode ? "No trip in this account" : "No trip in this browser"}</h1>
             <p className="text-sm text-muted-foreground">
-              Create one, import a JSON backup, or add the sample Bangkok trip. Nothing is uploaded.
+              {book.accountMode
+                ? "Create one here, or let an agent create it with your account token."
+                : "Create one, import a JSON backup, or add the sample Bangkok trip. Nothing is uploaded."}
             </p>
             <Button type="button" onClick={() => setLibraryOpen(true)}>
               Open the library

@@ -145,6 +145,32 @@ func (s *Store) UpdateTrip(ctx context.Context, ownerID string, item trip.Trip) 
 	})
 }
 
+func (s *Store) DeleteTrip(ctx context.Context, ownerID, id string) error {
+	owner, _, err := s.GetTrip(ctx, id)
+	if err != nil {
+		return err
+	}
+	if owner != ownerID {
+		return store.ErrForbidden
+	}
+	iter := s.client.Collection("shares").Where("tripId", "==", id).Documents(ctx)
+	defer iter.Stop()
+	for {
+		snap, err := iter.Next()
+		if errors.Is(err, iterator.Done) {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		if _, err := snap.Ref.Delete(ctx); err != nil {
+			return err
+		}
+	}
+	_, err = s.client.Collection("trips").Doc(id).Delete(ctx)
+	return err
+}
+
 func (s *Store) GetTrip(ctx context.Context, id string) (string, trip.Trip, error) {
 	if err := documentID(id); err != nil {
 		return "", trip.Trip{}, store.ErrNotFound

@@ -359,8 +359,7 @@ export function TripMap({ places, line, mode, nearby, camera, onSelectLocation }
               <p className="font-medium">Google Maps needs an API key</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 Restaurants, landmarks, and other places come from Google. Enable the Maps JavaScript API, create a
-                browser key, and allow <span className="whitespace-nowrap">http://127.0.0.1:3847/*</span>. The key stays
-                in this browser.
+                browser key, and allow this site&apos;s address. The key stays in this browser.
               </p>
             </div>
             <Input

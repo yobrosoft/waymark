@@ -36,6 +36,7 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/trips", s.createTrip)
 	mux.HandleFunc("GET /v1/trips/{id}", s.getTrip)
 	mux.HandleFunc("PUT /v1/trips/{id}", s.updateTrip)
+	mux.HandleFunc("DELETE /v1/trips/{id}", s.deleteTrip)
 	mux.HandleFunc("POST /v1/trips/{id}/shares", s.createShare)
 	mux.HandleFunc("GET /v1/shared/{token}", s.sharedTrip)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -149,6 +150,24 @@ func (s Server) updateTrip(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "trip": item})
 }
 
+func (s Server) deleteTrip(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.user(r)
+	if !ok {
+		writeErr(w, http.StatusUnauthorized, "Sign in with a Waymark account token.", nil)
+		return
+	}
+	err := s.Store.DeleteTrip(r.Context(), user.ID, r.PathValue("id"))
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) || errors.Is(err, store.ErrForbidden) {
+			writeErr(w, http.StatusNotFound, "That trip was not found in this account.", nil)
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, "The trip was not deleted.", nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 func (s Server) createShare(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.user(r)
 	if !ok {
@@ -242,7 +261,7 @@ func (s Server) cors(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", origin)
 	w.Header().Set("Vary", "Origin")
 	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 }
 
 func bearer(header string) string {

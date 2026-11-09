@@ -140,6 +140,31 @@ WHERE id = ? AND owner_id = ?`, item.Name, item.Status, item.Timezone, item.Upda
 	return store.ErrForbidden
 }
 
+func (db *DB) DeleteTrip(ctx context.Context, ownerID, id string) error {
+	owner, _, err := db.GetTrip(ctx, id)
+	if err != nil {
+		return err
+	}
+	if owner != ownerID {
+		return store.ErrForbidden
+	}
+	if _, err := db.sql.ExecContext(ctx, `DELETE FROM shares WHERE trip_id = ?`, id); err != nil {
+		return err
+	}
+	result, err := db.sql.ExecContext(ctx, `DELETE FROM trips WHERE id = ? AND owner_id = ?`, id, ownerID)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return store.ErrNotFound
+	}
+	return nil
+}
+
 func (db *DB) GetTrip(ctx context.Context, id string) (string, trip.Trip, error) {
 	var owner, raw string
 	err := db.sql.QueryRowContext(ctx, `SELECT owner_id, document FROM trips WHERE id = ?`, id).Scan(&owner, &raw)

@@ -43,6 +43,7 @@ type Store interface {
 
 	CreateTrip(ctx context.Context, ownerID string, item trip.Trip) error
 	UpdateTrip(ctx context.Context, ownerID string, item trip.Trip) error
+	DeleteTrip(ctx context.Context, ownerID, id string) error
 	GetTrip(ctx context.Context, id string) (ownerID string, item trip.Trip, err error)
 	ListTrips(ctx context.Context, ownerID string) ([]trip.Summary, error)
 
