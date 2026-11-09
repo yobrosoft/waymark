@@ -103,14 +103,32 @@ export function TripMap({ places, line, mode, nearby, camera, onSelectLocation }
   const [ready, setReady] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [storedKey, setStoredKey] = useState("");
+  const [hostedKey, setHostedKey] = useState("");
+  const [configReady, setConfigReady] = useState(Boolean(ENV_KEY));
   const [draftKey, setDraftKey] = useState("");
   const [keyNote, setKeyNote] = useState<string | null>(null);
   const onSelectRef = useRef(onSelectLocation);
   onSelectRef.current = onSelectLocation;
-  const key = ENV_KEY || storedKey;
+  const key = ENV_KEY || hostedKey || storedKey;
 
   useEffect(() => {
     setStoredKey(readStoredKey());
+    if (ENV_KEY) return;
+    let cancel = false;
+    fetch("/config.json", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: { mapsKey?: unknown } | null) => {
+        if (cancel) return;
+        const value = typeof body?.mapsKey === "string" ? body.mapsKey.trim() : "";
+        if (value) setHostedKey(value);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancel) setConfigReady(true);
+      });
+    return () => {
+      cancel = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -349,7 +367,7 @@ export function TripMap({ places, line, mode, nearby, camera, onSelectLocation }
   return (
     <div className="relative h-full min-h-64">
       <div ref={containerRef} className="h-full w-full" role="application" aria-label="Google map" />
-      {!key ? (
+      {configReady && !key ? (
         <form
           className="absolute inset-0 z-20 grid place-items-center bg-background/85 p-4"
           onSubmit={saveKey}
