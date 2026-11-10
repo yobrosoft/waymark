@@ -133,7 +133,7 @@ export function transitDeparture(input: {
       };
     }
     if (inWindow(atClock, now)) {
-      return { ok: true, at: atClock, note: formatLeaving(atClock, input.timeZone), cacheKey: atClock.toISOString().slice(0, 16) };
+      return { ok: true, at: atClock, note: `${formatLeaving(atClock, input.timeZone)}.`, cacheKey: atClock.toISOString().slice(0, 16) };
     }
     return {
       ok: true,
@@ -212,7 +212,7 @@ export function parseTransitRoute(
   }
   const services = transitServices(input.steps);
   const warning = input.warnings?.find((item) => item.trim())?.trim();
-  const summary = [services, note, warning].filter(Boolean).join(" ").slice(0, 400);
+  const summary = [services, note, warning].filter(Boolean).join(". ").slice(0, 400);
   return {
     ok: true,
     route: {
