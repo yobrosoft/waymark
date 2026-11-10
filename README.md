@@ -1,6 +1,8 @@
 # Waymark
 
-A local-first trip planner. The map is Google Maps, so restaurants, landmarks, and other places are Google's. The highlighted line is a road route from a public routing service, with that service's distance and typical time. Saved trips stay in this browser and are not uploaded.
+A trip planner. The map is Google Maps, so restaurants, landmarks, and other places are Google's. The highlighted line is a road route from a public routing service, with that service's distance and typical time.
+
+Signed in on the hosted app, trips are saved to the Waymark account. The same account is what a connected agent reads and updates, and a view link shares one trip. A local `npm run dev` without `NEXT_PUBLIC_WAYMARK_API_URL` keeps trips in this browser and does not upload them.
 
 The sample trip is a **proposed** Bangkok sequence for 8–14 December 2026: 16 ordered stops at 8 places, starting at Suvarnabhumi. The hotel, flights, and restaurant tables in that sample are not bookings.
 
@@ -35,14 +37,16 @@ To let Grok read a shared trip and send a suggestion back, run the Waymark MCP a
 - **Overview** frames every saved place. **Fit leg** frames the current road route, or the pin if there is no route.
 - The day chips jump to the first stop on that day. A map pin jumps to the next visit of that place, then wraps.
 - Drive, walk, and cycle use real routed geometry. Transit and taxi open Google Maps instead of showing a made-up time.
-- Save several trips in this browser: create, edit, duplicate, delete (with confirmation), reorder stops, and edit coordinates or search for a place.
+- Save several trips: create, edit, duplicate, delete (with confirmation), reorder stops, and edit coordinates or search for a place. On the hosted app those writes go to the account. Locally they stay in this browser.
 - Export one trip or the whole library as JSON. Import validates the file before anything is written. Adding a file as new trips does not overwrite existing ones. Replacing same ids is a separate button.
 
 Two hotel stops in the sample are same-place rest. Those legs do not request a route. Later visits to the hotel do.
 
 ## Where data lives
 
-Trip names, notes, days, and stops are stored in **IndexedDB** in this browser profile (`waymark` / `library`). They are not synced and they are not uploaded. Clearing site data, or opening another browser or phone, starts from an empty book (the sample is added only when that store is empty). A reload does not put the sample back on top of edits. If the saved document is from a newer version or does not validate, Waymark leaves it untouched and offers a download.
+On the hosted app, trip names, notes, days, and stops are stored in the signed-in account. Sign in with the same Google account in another browser and they are there. An agent connected to that account reads and updates the same trips. Share copies a view link for one trip.
+
+A local run without `NEXT_PUBLIC_WAYMARK_API_URL` stores that document in **IndexedDB** in this browser profile (`waymark` / `library`). It is not synced and it is not uploaded. Clearing site data, or opening another browser or phone, starts from an empty book (the sample is added only when that store is empty). A reload does not put the sample back on top of edits. If the saved document is from a newer version or does not validate, Waymark leaves it untouched and offers a download.
 
 The last stop you were viewing is a small `localStorage` preference. Losing it does not change the trip.
 
@@ -59,7 +63,7 @@ Export a JSON file when you want a portable backup.
 
 If a service fails, the app says so. It does not draw a straight line or invent a duration. Same-place legs never call the router.
 
-The browser calls those services directly. A successful route is cached in this browser. The site does not keep a copy of the trip.
+The browser calls those services directly. A successful route is cached in this browser. The route request does not include the trip. A signed-in account stores the trip separately.
 
 Keep Google’s logo on the map, and keep the OSRM attribution. [Fix the map](https://www.openstreetmap.org/fixthemap) if a routed street is wrong. A wrong restaurant or landmark is Google’s data. The public routing server is a demo: do not scrape it or send a route for every stop at once. This app only asks for the leg you are looking at.
 

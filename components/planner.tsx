@@ -574,11 +574,12 @@ export function Planner() {
       </section>
 
 
-      <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} accountMode={book.accountMode} />
       <LibraryDialog
         open={libraryOpen}
         onOpenChange={setLibraryOpen}
         library={book.library}
+        accountMode={book.accountMode}
         onOpenTrip={(id) => {
           void book.selectTrip(id);
           setLibraryOpen(false);
@@ -615,7 +616,11 @@ export function Planner() {
           if (!open) setDeleteStopId(null);
         }}
         title="Remove this stop?"
-        body="The place stays in the trip so you can use it again. This only changes the order saved in this browser."
+        body={
+          book.accountMode
+            ? "The place stays in the trip so you can use it again. This updates the trip saved in your account."
+            : "The place stays in the trip so you can use it again. This only changes the order saved in this browser."
+        }
         onConfirm={() => {
           if (!trip || !deleteStopId) return;
           const next = deleteStop(trip, deleteStopId, new Date().toISOString());

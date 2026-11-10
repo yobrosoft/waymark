@@ -70,24 +70,35 @@ export function ConfirmDelete({
   );
 }
 
-export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function HelpDialog({
+  open,
+  onOpenChange,
+  accountMode = false,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  accountMode?: boolean;
+}) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="waymark-dialog max-h-[85dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>How this trip book works</DialogTitle>
           <DialogDescription>
-            Waymark plans one leg at a time on a real street map. Your trips stay in this browser.
+            {accountMode
+              ? "Waymark plans one leg at a time on a real street map. Signed-in trips are saved to the Waymark account."
+              : "Waymark plans one leg at a time on a real street map. Your trips stay in this browser."}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 text-sm leading-relaxed">
           <section>
-            <h3 className="font-heading text-base font-medium">Saved on this device</h3>
+            <h3 className="font-heading text-base font-medium">
+              {accountMode ? "Saved to your account" : "Saved on this device"}
+            </h3>
             <p className="mt-1 text-muted-foreground">
-              Trips are stored in IndexedDB in this browser profile. They are not synced to an account
-              and this site does not upload them. Another phone, another browser, or a cleared
-              site-storage setting will not have them. Export a JSON backup when a trip matters.
-              Reloading the page does not replace your edits with the sample.
+              {accountMode
+                ? "Trips are stored with the Waymark account. Sign in with the same Google account on another browser or phone and they are there. A view link shares one trip for reading. An agent connected to this account, including Grok, reads and updates the same trips. Export a JSON backup when you want your own file. Reloading the page does not replace your edits with the sample."
+                : "Trips are stored in IndexedDB in this browser profile. They are not synced to an account and this site does not upload them. Another phone, another browser, or a cleared site-storage setting will not have them. Export a JSON backup when a trip matters. Reloading the page does not replace your edits with the sample."}
             </p>
           </section>
           <section>
@@ -99,10 +110,10 @@ export function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange
               sends the pin and a 700 metre query to a public Overpass server, which often refuses or
               times out; the list then stays empty and says so. Address search is off because the public
               geocoder refuses browser requests. Names, notes, and the rest of the library are not part
-              of those requests. The Google Maps key stays in this browser, or in the build if one was
-              set there. Sharing a trip copies that trip to the Waymark server on this Mac so Grok can
-              read it and send a suggestion. The suggestion is not written here until you apply it.
-              Stop sharing deletes that server copy. Other trips stay in this browser.
+              of those map requests.{" "}
+              {accountMode
+                ? "The trip itself is saved to the account. Share copies a view link for the open trip. Anyone with that link can read it. They cannot change it."
+                : "The Google Maps key stays in this browser, or in the build if one was set there. Sharing a trip copies that trip to the Waymark server on this Mac so Grok can read it and send a suggestion. The suggestion is not written here until you apply it. Stop sharing deletes that server copy. Other trips stay in this browser."}
             </p>
           </section>
           <section>
@@ -158,6 +169,7 @@ export function LibraryDialog({
   onCreate,
   onImport,
   onAddSample,
+  accountMode = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -168,6 +180,7 @@ export function LibraryDialog({
   onCreate: (input: { name: string; timezone: string }) => Promise<string | null>;
   onImport: (trips: Trip[], mode: ImportCommit) => Promise<string | null>;
   onAddSample: () => Promise<string | null>;
+  accountMode?: boolean;
 }) {
   const [name, setName] = useState("");
   const [timezone, setTimezone] = useState("Asia/Bangkok");
@@ -195,7 +208,9 @@ export function LibraryDialog({
         <DialogHeader>
           <DialogTitle>Trip library</DialogTitle>
           <DialogDescription>
-            {library.trips.length} saved in this browser. Nothing here is uploaded.
+            {accountMode
+              ? `${library.trips.length} saved in this account.`
+              : `${library.trips.length} saved in this browser. Nothing here is uploaded.`}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
@@ -357,8 +372,12 @@ export function LibraryDialog({
           onOpenChange={(next) => {
             if (!next) setPendingDelete(null);
           }}
-          title="Delete this trip from this browser?"
-          body="There is no cloud copy. Export it first if you might want it again. This cannot be undone."
+          title={accountMode ? "Delete this trip from your account?" : "Delete this trip from this browser?"}
+          body={
+            accountMode
+              ? "This removes it from your account, including for a connected agent. Share links for it stop working. This cannot be undone."
+              : "There is no cloud copy. Export it first if you might want it again. This cannot be undone."
+          }
           onConfirm={() => {
             if (pendingDelete) onDelete(pendingDelete);
             setPendingDelete(null);
