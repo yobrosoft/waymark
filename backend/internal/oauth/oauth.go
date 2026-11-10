@@ -2,6 +2,7 @@
 package oauth
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"html"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yobrosoft/waymark/backend/internal/googleauth"
 	"github.com/yobrosoft/waymark/backend/internal/mcp"
 	"github.com/yobrosoft/waymark/backend/internal/secret"
 	"github.com/yobrosoft/waymark/backend/internal/store"
@@ -20,8 +22,13 @@ const clientID = "grok"
 
 // Handler serves discovery, registration, consent, and token exchange.
 type Handler struct {
-	Store  store.Store
-	Origin string
+	Store        store.Store
+	Origin       string
+	AllowSignup  bool
+	GoogleID     string
+	GoogleSecret string
+	Verify       func(ctx context.Context, raw string) (googleauth.Profile, error)
+	Exchange     func(ctx context.Context, code, redirectURI string) (string, error)
 }
 
 func (h Handler) Register(mux *http.ServeMux) {
@@ -31,6 +38,7 @@ func (h Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /oauth/register", h.register)
 	mux.HandleFunc("GET /oauth/authorize", h.authorize)
 	mux.HandleFunc("POST /oauth/authorize", h.authorize)
+	mux.HandleFunc("GET /oauth/google/callback", h.googleCallback)
 	mux.HandleFunc("POST /oauth/token", h.token)
 }
 
@@ -95,7 +103,7 @@ func (h Handler) authorize(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
-		_, _ = io.WriteString(w, consentPage(query))
+		_, _ = io.WriteString(w, h.consentPage(query))
 		return
 	}
 	user, err := h.Store.UserByTokenHash(r.Context(), secret.Hash(r.Form.Get("token")))
@@ -103,6 +111,10 @@ func (h Handler) authorize(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid token", http.StatusUnauthorized)
 		return
 	}
+	h.finish(w, r, query, user)
+}
+
+func (h Handler) finish(w http.ResponseWriter, r *http.Request, query *query, user store.User) {
 	code, err := secret.New("", 32)
 	if err != nil {
 		http.Error(w, "authorization request rejected", http.StatusInternalServerError)
@@ -249,7 +261,7 @@ func pkce(verifier, challenge string) bool {
 	return secret.Same(got, challenge)
 }
 
-func consentPage(q *query) string {
+func (h Handler) consentPage(q *query) string {
 	fields := [][2]string{
 		{"response_type", "code"},
 		{"client_id", clientID},
@@ -268,10 +280,28 @@ func consentPage(q *query) string {
 		hidden.WriteString(html.EscapeString(field[1]))
 		hidden.WriteString(`">`)
 	}
-	return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Connect Waymark</title></head><body>
-<h1>Connect this agent to Waymark</h1>
-<p>Paste the account token from Waymark. The agent can create and update trips in that account. A shared view link is separate.</p>
-<form method="post" action="/oauth/authorize">` + hidden.String() + `
+	tokenForm := `<form method="post" action="/oauth/authorize">` + hidden.String() + `
 <label>Account token <input type="password" name="token" autocomplete="off" required></label>
-<button type="submit">Allow</button></form></body></html>`
+<button type="submit">Allow</button></form>`
+	google := h.googleAuthURL(q)
+	intro := `<p>Paste the account token from Waymark. The agent can create and update trips in that account. A shared view link is separate.</p>` + tokenForm
+	if google != "" {
+		intro = `<p>Sign in with Google. The first sign-in creates the Waymark account. The agent can then create and update trips in that account.</p>
+<p><a class="google" href="` + html.EscapeString(google) + `">Continue with Google</a></p>
+<details><summary>Use an existing account token</summary>` + tokenForm + `</details>`
+	}
+	return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Connect Waymark</title>
+<style>
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f2f2f7;color:#1c1c1e;font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{width:min(28rem,calc(100% - 2rem));background:#fff;border-radius:1rem;padding:1.5rem}
+h1{font-size:1.5rem;font-weight:600;margin:0 0 .5rem}
+p,summary{color:#3a3a3c}
+a.google,button{display:inline-flex;align-items:center;justify-content:center;margin-top:.5rem;border-radius:999px;padding:.6rem 1rem;font:inherit;font-weight:600;text-decoration:none}
+a.google{background:#fff;color:#1c1c1e;border:1px solid #d1d1d6}
+button{background:#007aff;color:#fff;border:0}
+label{display:grid;gap:.35rem;margin:.75rem 0}
+input{font:inherit;padding:.55rem .7rem;border:1px solid #d1d1d6;border-radius:.7rem}
+details{margin-top:1.25rem}
+</style></head><body><main>
+<h1>Connect this agent to Waymark</h1>` + intro + `</main></body></html>`
 }

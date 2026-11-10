@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/firestore"
+	"github.com/yobrosoft/waymark/backend/internal/secret"
 	"github.com/yobrosoft/waymark/backend/internal/store"
 	"github.com/yobrosoft/waymark/backend/internal/trip"
 	"google.golang.org/api/iterator"
@@ -28,6 +29,13 @@ var _ store.Store = (*Store)(nil)
 type userDoc struct {
 	Name      string    `firestore:"name"`
 	TokenHash string    `firestore:"tokenHash"`
+	Email     string    `firestore:"email,omitempty"`
+	GoogleSub string    `firestore:"googleSub,omitempty"`
+	CreatedAt time.Time `firestore:"createdAt"`
+}
+
+type sessionDoc struct {
+	UserID    string    `firestore:"userId"`
 	CreatedAt time.Time `firestore:"createdAt"`
 }
 
@@ -79,10 +87,98 @@ func (s *Store) CreateUser(ctx context.Context, name, tokenHash string) (store.U
 }
 
 func (s *Store) UserByTokenHash(ctx context.Context, tokenHash string) (store.User, error) {
+	if err := documentID(tokenHash); err != nil {
+		return store.User{}, store.ErrNotFound
+	}
 	iter := s.client.Collection("users").Where("tokenHash", "==", tokenHash).Limit(1).Documents(ctx)
 	defer iter.Stop()
 	snap, err := iter.Next()
-	if errors.Is(err, iterator.Done) {
+	if err == nil {
+		var doc userDoc
+		if err := snap.DataTo(&doc); err != nil {
+			return store.User{}, err
+		}
+		return store.User{ID: snap.Ref.ID, Name: doc.Name}, nil
+	}
+	if !errors.Is(err, iterator.Done) {
+		return store.User{}, err
+	}
+	session, err := s.client.Collection("sessions").Doc(tokenHash).Get(ctx)
+	if status.Code(err) == codes.NotFound {
+		return store.User{}, store.ErrNotFound
+	}
+	if err != nil {
+		return store.User{}, err
+	}
+	var saved sessionDoc
+	if err := session.DataTo(&saved); err != nil {
+		return store.User{}, err
+	}
+	return s.userByID(ctx, saved.UserID)
+}
+
+func (s *Store) GoogleUser(ctx context.Context, profile store.GoogleProfile, allowCreate bool) (store.User, error) {
+	if profile.Sub == "" || profile.Name == "" || strings.Contains(profile.Sub, "/") {
+		return store.User{}, errors.New("google profile")
+	}
+	var user store.User
+	err := s.client.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
+		iter := tx.Documents(s.client.Collection("users").Where("googleSub", "==", profile.Sub).Limit(1))
+		defer iter.Stop()
+		snap, err := iter.Next()
+		if errors.Is(err, iterator.Done) {
+			if !allowCreate {
+				return store.ErrForbidden
+			}
+			placeholder, err := secret.New("", 32)
+			if err != nil {
+				return err
+			}
+			ref := s.client.Collection("users").NewDoc()
+			if err := tx.Create(ref, userDoc{
+				Name: profile.Name, TokenHash: secret.Hash(placeholder), Email: profile.Email,
+				GoogleSub: profile.Sub, CreatedAt: time.Now().UTC(),
+			}); err != nil {
+				return err
+			}
+			user = store.User{ID: ref.ID, Name: profile.Name}
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if err := tx.Update(snap.Ref, []firestore.Update{
+			{Path: "name", Value: profile.Name},
+			{Path: "email", Value: profile.Email},
+		}); err != nil {
+			return err
+		}
+		user = store.User{ID: snap.Ref.ID, Name: profile.Name}
+		return nil
+	})
+	return user, err
+}
+
+func (s *Store) SaveSession(ctx context.Context, userID, tokenHash string) error {
+	if userID == "" {
+		return errors.New("session")
+	}
+	if err := documentID(tokenHash); err != nil {
+		return err
+	}
+	_, err := s.client.Collection("sessions").Doc(tokenHash).Create(ctx, sessionDoc{UserID: userID, CreatedAt: time.Now().UTC()})
+	if status.Code(err) == codes.AlreadyExists {
+		return store.ErrConflict
+	}
+	return err
+}
+
+func (s *Store) userByID(ctx context.Context, id string) (store.User, error) {
+	if err := documentID(id); err != nil {
+		return store.User{}, store.ErrNotFound
+	}
+	snap, err := s.client.Collection("users").Doc(id).Get(ctx)
+	if status.Code(err) == codes.NotFound {
 		return store.User{}, store.ErrNotFound
 	}
 	if err != nil {

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yobrosoft/waymark/backend/internal/secret"
 	"github.com/yobrosoft/waymark/backend/internal/store"
 	"github.com/yobrosoft/waymark/backend/internal/trip"
 	_ "modernc.org/sqlite"
@@ -78,6 +79,47 @@ CREATE TABLE IF NOT EXISTS oauth_refresh (
   expires TEXT NOT NULL
 );
 `)
+	if err != nil {
+		return err
+	}
+	if err := addColumn(db, "users", "google_sub", "TEXT"); err != nil {
+		return err
+	}
+	if err := addColumn(db, "users", "email", "TEXT"); err != nil {
+		return err
+	}
+	_, err = db.Exec(`
+CREATE TABLE IF NOT EXISTS sessions (
+  token_hash TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub ON users(google_sub) WHERE google_sub IS NOT NULL;
+`)
+	return err
+}
+
+func addColumn(db *sql.DB, table, column, decl string) error {
+	rows, err := db.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid, notnull, pk int
+		var name, ctype string
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return err
+		}
+		if name == column {
+			return rows.Err()
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	_, err = db.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` ` + decl)
 	return err
 }
 
@@ -92,7 +134,65 @@ func (db *DB) CreateUser(ctx context.Context, name, tokenHash string) (store.Use
 }
 
 func (db *DB) UserByTokenHash(ctx context.Context, tokenHash string) (store.User, error) {
-	return db.userWhere(ctx, `SELECT id, name FROM users WHERE token_hash = ?`, tokenHash)
+	user, err := db.userWhere(ctx, `SELECT id, name FROM users WHERE token_hash = ?`, tokenHash)
+	if err == nil || !errors.Is(err, store.ErrNotFound) {
+		return user, err
+	}
+	return db.userWhere(ctx, `
+SELECT users.id, users.name FROM sessions
+JOIN users ON users.id = sessions.user_id
+WHERE sessions.token_hash = ?`, tokenHash)
+}
+
+func (db *DB) GoogleUser(ctx context.Context, profile store.GoogleProfile, allowCreate bool) (store.User, error) {
+	if profile.Sub == "" || profile.Name == "" {
+		return store.User{}, errors.New("google profile")
+	}
+	tx, err := db.sql.BeginTx(ctx, nil)
+	if err != nil {
+		return store.User{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var id string
+	err = tx.QueryRowContext(ctx, `SELECT id FROM users WHERE google_sub = ?`, profile.Sub).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		if !allowCreate {
+			return store.User{}, store.ErrForbidden
+		}
+		id = "usr-" + randomID()
+		placeholder, err := secret.New("", 32)
+		if err != nil {
+			return store.User{}, err
+		}
+		now := time.Now().UTC().Format(time.RFC3339)
+		_, err = tx.ExecContext(ctx, `
+INSERT INTO users (id, name, token_hash, created_at, google_sub, email)
+VALUES (?, ?, ?, ?, ?, ?)`, id, profile.Name, secret.Hash(placeholder), now, profile.Sub, profile.Email)
+		if err != nil {
+			return store.User{}, err
+		}
+	} else if err != nil {
+		return store.User{}, err
+	} else if _, err := tx.ExecContext(ctx, `UPDATE users SET name = ?, email = ? WHERE id = ?`, profile.Name, profile.Email, id); err != nil {
+		return store.User{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return store.User{}, err
+	}
+	return store.User{ID: id, Name: profile.Name}, nil
+}
+
+func (db *DB) SaveSession(ctx context.Context, userID, tokenHash string) error {
+	if userID == "" || tokenHash == "" {
+		return errors.New("session")
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := db.sql.ExecContext(ctx, `INSERT INTO sessions (token_hash, user_id, created_at) VALUES (?, ?, ?)`, tokenHash, userID, now)
+	if isUnique(err) {
+		return store.ErrConflict
+	}
+	return err
 }
 
 func (db *DB) CreateTrip(ctx context.Context, ownerID string, item trip.Trip) error {

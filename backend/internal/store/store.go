@@ -22,6 +22,13 @@ type User struct {
 	Name string
 }
 
+// GoogleProfile is the verified identity from a Google sign-in.
+type GoogleProfile struct {
+	Sub   string
+	Email string
+	Name  string
+}
+
 type Share struct {
 	Token     string
 	TripID    string
@@ -40,6 +47,8 @@ type AuthCode struct {
 type Store interface {
 	CreateUser(ctx context.Context, name, tokenHash string) (User, error)
 	UserByTokenHash(ctx context.Context, tokenHash string) (User, error)
+	GoogleUser(ctx context.Context, profile GoogleProfile, allowCreate bool) (User, error)
+	SaveSession(ctx context.Context, userID, tokenHash string) error
 
 	CreateTrip(ctx context.Context, ownerID string, item trip.Trip) error
 	UpdateTrip(ctx context.Context, ownerID string, item trip.Trip) error

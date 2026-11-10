@@ -431,7 +431,7 @@ export function Planner() {
               <h1 className="font-heading text-2xl">{book.accountMode ? "No trip in this account" : "No trip in this browser"}</h1>
               <p className="text-sm text-muted-foreground">
                 {book.accountMode
-                  ? "Create one here, or let an agent create it with your account token."
+                  ? "Create one here, or let an agent create it after you connect it to this account."
                   : "Create one, import a JSON backup, or add the sample Bangkok trip. Nothing is uploaded."}
               </p>
               <Button type="button" onClick={() => setLibraryOpen(true)}>

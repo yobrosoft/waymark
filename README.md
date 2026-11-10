@@ -93,7 +93,7 @@ Stop status `buffer` is a same-place rest. Trip status `proposed` means the plan
 
 ## Account API
 
-The Go service in `backend/` stores trips for an account, lets an agent create and update them over MCP, and issues a view link for someone else. Local runs use one SQLite file. The intended host is Cloud Run with Firestore, not the Vercel free plan. See [backend/README.md](backend/README.md).
+The Go service in `backend/` stores trips for an account, lets an agent create and update them over MCP, and issues a view link for someone else. People sign in with Google. The Grok consent page uses that same Google account, so there is no token to copy. Local runs use one SQLite file. The intended host is Cloud Run with Firestore, not the Vercel free plan. See [backend/README.md](backend/README.md).
 
 ## Grok on the tailnet
 

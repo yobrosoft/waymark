@@ -41,6 +41,13 @@ async function read(response: Response): Promise<{ ok?: boolean; error?: string;
   return body;
 }
 
+export async function signInWithGoogle(credential: string): Promise<string> {
+  const response = await request("/v1/sessions", { method: "POST", body: JSON.stringify({ credential }) }, null);
+  const body = await read(response);
+  if (!body.token) throw new Error("Google sign-in did not open an account.");
+  return body.token;
+}
+
 export async function createAccount(name: string): Promise<string> {
   const response = await request("/v1/accounts", { method: "POST", body: JSON.stringify({ name }) }, null);
   const body = await read(response);

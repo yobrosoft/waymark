@@ -39,10 +39,12 @@ func main() {
 		}
 	}
 	server := api.Server{
-		Store:       db,
-		Origin:      origin,
-		AllowSignup: os.Getenv("WAYMARK_ALLOW_SIGNUP") != "false",
-		UIOrigins:   ui,
+		Store:        db,
+		Origin:       origin,
+		AllowSignup:  os.Getenv("WAYMARK_ALLOW_SIGNUP") != "false",
+		UIOrigins:    ui,
+		GoogleID:     os.Getenv("WAYMARK_GOOGLE_CLIENT_ID"),
+		GoogleSecret: os.Getenv("WAYMARK_GOOGLE_CLIENT_SECRET"),
 	}
 	log.Printf("listening on %s", addr)
 	log.Fatal(http.ListenAndServe(addr, server.Handler()))

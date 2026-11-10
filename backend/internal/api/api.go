@@ -2,6 +2,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yobrosoft/waymark/backend/internal/googleauth"
 	"github.com/yobrosoft/waymark/backend/internal/mcp"
 	"github.com/yobrosoft/waymark/backend/internal/oauth"
 	"github.com/yobrosoft/waymark/backend/internal/secret"
@@ -18,10 +20,14 @@ import (
 
 // Server is the Waymark account API.
 type Server struct {
-	Store       store.Store
-	Origin      string
-	AllowSignup bool
-	UIOrigins   map[string]struct{}
+	Store        store.Store
+	Origin       string
+	AllowSignup  bool
+	UIOrigins    map[string]struct{}
+	GoogleID     string
+	GoogleSecret string
+	Verify       func(ctx context.Context, raw string) (googleauth.Profile, error)
+	Exchange     func(ctx context.Context, code, redirectURI string) (string, error)
 }
 
 func (s Server) Handler() http.Handler {
@@ -29,9 +35,13 @@ func (s Server) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	oauth.Handler{Store: s.Store, Origin: s.Origin}.Register(mux)
+	oauth.Handler{
+		Store: s.Store, Origin: s.Origin, AllowSignup: s.AllowSignup,
+		GoogleID: s.GoogleID, GoogleSecret: s.GoogleSecret, Verify: s.Verify, Exchange: s.Exchange,
+	}.Register(mux)
 	mux.Handle("POST /mcp", mcp.Handler{Store: s.Store, Origin: s.Origin, Identify: s.user})
 	mux.HandleFunc("POST /v1/accounts", s.createAccount)
+	mux.HandleFunc("POST /v1/sessions", s.createSession)
 	mux.HandleFunc("GET /v1/trips", s.listTrips)
 	mux.HandleFunc("POST /v1/trips", s.createTrip)
 	mux.HandleFunc("GET /v1/trips/{id}", s.getTrip)
@@ -74,10 +84,59 @@ func (s Server) createAccount(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{"ok": true, "id": user.ID, "name": user.Name, "token": token})
 }
 
+func (s Server) createSession(w http.ResponseWriter, r *http.Request) {
+	if s.GoogleID == "" && s.Verify == nil {
+		writeErr(w, http.StatusNotFound, "Google sign-in is not configured.", nil)
+		return
+	}
+	var body struct {
+		Credential string `json:"credential"`
+	}
+	if err := decode(w, r, &body); err != nil || strings.TrimSpace(body.Credential) == "" {
+		writeErr(w, http.StatusBadRequest, "Google sign-in did not complete.", nil)
+		return
+	}
+	verify := s.Verify
+	if verify == nil {
+		verify = func(ctx context.Context, raw string) (googleauth.Profile, error) {
+			return googleauth.Verify(ctx, raw, s.GoogleID)
+		}
+	}
+	profile, err := verify(r.Context(), body.Credential)
+	if err != nil {
+		writeErr(w, http.StatusUnauthorized, "Google sign-in did not complete.", nil)
+		return
+	}
+	account, err := googleauth.Account(profile)
+	if err != nil {
+		writeErr(w, http.StatusUnauthorized, "That Google account has no verified email.", nil)
+		return
+	}
+	user, err := s.Store.GoogleUser(r.Context(), account, s.AllowSignup)
+	if errors.Is(err, store.ErrForbidden) {
+		writeErr(w, http.StatusForbidden, "Account signup is turned off.", nil)
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "The account was not created.", nil)
+		return
+	}
+	token, err := secret.New("wm_", 32)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "The account was not created.", nil)
+		return
+	}
+	if err := s.Store.SaveSession(r.Context(), user.ID, secret.Hash(token)); err != nil {
+		writeErr(w, http.StatusInternalServerError, "The account was not created.", nil)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"ok": true, "id": user.ID, "name": user.Name, "token": token})
+}
+
 func (s Server) listTrips(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.user(r)
 	if !ok {
-		writeErr(w, http.StatusUnauthorized, "Sign in with a Waymark account token.", nil)
+		writeErr(w, http.StatusUnauthorized, "Sign in to Waymark.", nil)
 		return
 	}
 	items, err := s.Store.ListTrips(r.Context(), user.ID)
@@ -94,7 +153,7 @@ func (s Server) listTrips(w http.ResponseWriter, r *http.Request) {
 func (s Server) createTrip(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.user(r)
 	if !ok {
-		writeErr(w, http.StatusUnauthorized, "Sign in with a Waymark account token.", nil)
+		writeErr(w, http.StatusUnauthorized, "Sign in to Waymark.", nil)
 		return
 	}
 	item, issues, code := s.readTrip(w, r, "")
@@ -116,7 +175,7 @@ func (s Server) createTrip(w http.ResponseWriter, r *http.Request) {
 func (s Server) getTrip(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.user(r)
 	if !ok {
-		writeErr(w, http.StatusUnauthorized, "Sign in with a Waymark account token.", nil)
+		writeErr(w, http.StatusUnauthorized, "Sign in to Waymark.", nil)
 		return
 	}
 	owner, item, err := s.Store.GetTrip(r.Context(), r.PathValue("id"))
@@ -130,7 +189,7 @@ func (s Server) getTrip(w http.ResponseWriter, r *http.Request) {
 func (s Server) updateTrip(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.user(r)
 	if !ok {
-		writeErr(w, http.StatusUnauthorized, "Sign in with a Waymark account token.", nil)
+		writeErr(w, http.StatusUnauthorized, "Sign in to Waymark.", nil)
 		return
 	}
 	id := r.PathValue("id")
@@ -153,7 +212,7 @@ func (s Server) updateTrip(w http.ResponseWriter, r *http.Request) {
 func (s Server) deleteTrip(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.user(r)
 	if !ok {
-		writeErr(w, http.StatusUnauthorized, "Sign in with a Waymark account token.", nil)
+		writeErr(w, http.StatusUnauthorized, "Sign in to Waymark.", nil)
 		return
 	}
 	err := s.Store.DeleteTrip(r.Context(), user.ID, r.PathValue("id"))
@@ -171,7 +230,7 @@ func (s Server) deleteTrip(w http.ResponseWriter, r *http.Request) {
 func (s Server) createShare(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.user(r)
 	if !ok {
-		writeErr(w, http.StatusUnauthorized, "Sign in with a Waymark account token.", nil)
+		writeErr(w, http.StatusUnauthorized, "Sign in to Waymark.", nil)
 		return
 	}
 	token, err := secret.New("", 24)

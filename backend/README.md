@@ -32,7 +32,9 @@ go run ./cmd/waymark
 
 The API listens on `127.0.0.1:8795`. The database file is `~/.local/share/waymark/waymark.db`.
 
-Create an account. The token is shown once. Give that token to the agent, or paste it on the MCP consent page.
+Sign in with Google. Set `WAYMARK_GOOGLE_CLIENT_ID` and `WAYMARK_GOOGLE_CLIENT_SECRET` from a web OAuth client. The app posts the Google ID token to `POST /v1/sessions` and keeps the session itself. The Grok consent page uses the same Google account. The first sign-in creates the Waymark account.
+
+A name-and-token account still works for a local curl, and on the consent page under “Use an existing account token”:
 
 ```bash
 curl -s -X POST http://127.0.0.1:8795/v1/accounts \
@@ -44,6 +46,6 @@ curl -s -X POST http://127.0.0.1:8795/v1/accounts \
 
 MCP is `POST /mcp`. Tools are `list_trips`, `get_trip`, `create_trip`, and `update_trip`. An update replaces the saved trip.
 
-For a Grok connector, set `WAYMARK_PUBLIC_ORIGIN` to the public origin. Discovery is `/.well-known/oauth-authorization-server`. The consent page asks for the account token. Client id `grok`, empty secret, scope `waymark:plan`.
+For a Grok connector, set `WAYMARK_PUBLIC_ORIGIN` to the public origin. Discovery is `/.well-known/oauth-authorization-server`. Client id `grok`, empty secret, scope `waymark:plan`. The consent page is “Continue with Google”.
 
-Set `WAYMARK_ALLOW_SIGNUP=false` on a public server until sign-in is more than a name. Set `WAYMARK_UI_ORIGINS` to the app origins that may call the API.
+Set `WAYMARK_ALLOW_SIGNUP=false` to keep new Google accounts from being created. Set `WAYMARK_UI_ORIGINS` to the app origins that may call the API. The app reads `googleClientId` from `/config.json`.
