@@ -15,6 +15,7 @@ import { createShareLink } from "@/lib/account";
 import { resolveNearby } from "@/lib/lookups";
 import { googleDirectionsUrl } from "@/lib/providers";
 import { resolveRoute, routeLine } from "@/lib/routing";
+import { transitDeparture } from "@/lib/transit";
 import {
   deleteStop,
   mapPlaces,
@@ -24,11 +25,22 @@ import {
   selectPinIndex,
   sequenceWarnings,
   stepIndex,
+  type SelectedLeg,
   type StopDraft,
 } from "@/lib/trip-logic";
-import type { LegMode, NearbyCategory, NearbyPlace, RouteView, Stop } from "@/lib/types";
+import type { LegMode, NearbyCategory, NearbyPlace, RouteView, Stop, Trip } from "@/lib/types";
 
-const MODES: LegMode[] = ["driving", "walking", "cycling"];
+const MODES: LegMode[] = ["driving", "walking", "cycling", "transit"];
+
+function departureFor(trip: Trip, leg: SelectedLeg) {
+  if (leg.mode !== "transit" || leg.samePlace) return null;
+  const date = trip.days.find((day) => day.id === leg.fromStop.dayId)?.date ?? "";
+  return transitDeparture({
+    date,
+    plannedTime: leg.fromStop.plannedTime,
+    timeZone: trip.timezone,
+  });
+}
 
 function emptyDraft(dayId: string): StopDraft {
   return {
@@ -101,7 +113,9 @@ export function Planner() {
   const trip = link.preview && link.pending ? link.pending.trip : savedTrip;
   const index = book.index;
   const leg = trip ? selectedLeg(trip, index) : null;
-  const legId = leg ? `${leg.fromStop.id}>${leg.toStop.id}:${leg.mode}:${leg.samePlace}` : "start";
+  const departure = trip && leg ? departureFor(trip, leg) : null;
+  const departKey = !departure ? "" : departure.ok ? departure.cacheKey : "unavailable";
+  const legId = leg ? `${leg.fromStop.id}>${leg.toStop.id}:${leg.mode}:${leg.samePlace}:${departKey}` : "start";
   const places = useMemo(() => (trip ? placesById(trip) : new Map()), [trip]);
   const markers = useMemo(() => (trip ? mapPlaces(trip, index) : []), [trip, index]);
   const warnings = trip ? sequenceWarnings(trip) : [];
@@ -135,6 +149,11 @@ export function Planner() {
       setRoute({ legId, view: { status: current?.samePlace ? "same-place" : "idle" } });
       return;
     }
+    const when = departure;
+    if (when && !when.ok) {
+      setRoute({ legId, view: { status: "error", message: when.message } });
+      return;
+    }
     const ac = new AbortController();
     setRoute({ legId, view: { status: "loading" } });
     resolveRoute({
@@ -143,12 +162,17 @@ export function Planner() {
       from: current.from,
       to: current.to,
       signal: ac.signal,
+      departAt: when?.ok ? when.at.toISOString() : undefined,
+      transitKey: when?.ok ? when.cacheKey : undefined,
+      departureNote: when?.ok ? when.note : undefined,
       cacheGet: (key) => bookRef.current.routeCacheGet(key),
       cacheSet: (key, value) => bookRef.current.routeCacheSet(key, value),
     }).then((result) => {
       if (!ac.signal.aborted) setRoute({ legId, view: result });
     });
     return () => ac.abort();
+    // departure is read from this render. legId already includes its cache key.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trip, index, legId, retry]);
 
   useEffect(() => {
@@ -480,7 +504,24 @@ export function Planner() {
                     </p>
                   ) : null}
                   {shown.status === "loading" ? <p className="text-xs">Routing…</p> : null}
-                  {shown.status === "ready" ? (
+                  {leg.mode === "transit" ? (
+                    <a
+                      className="px-1 text-xs underline"
+                      href={googleDirectionsUrl(leg.from, leg.to, "transit")}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open in Google Maps
+                    </a>
+                  ) : null}
+                  {shown.status === "ready" && shown.route.provider === "google-transit" ? (
+                    <p className={`basis-full text-xs ${night ? "text-[#aeaeb2]" : "text-muted-foreground"}`}>
+                      {shown.route.summary ? `${shown.route.summary} ` : ""}
+                      Public transport from Google. Not a live delay.
+                      {shown.fromCache ? ` Cached result from ${formatWhen(shown.route.fetchedAt)}.` : " Just fetched."}
+                    </p>
+                  ) : null}
+                  {shown.status === "ready" && shown.route.provider !== "google-transit" ? (
                     <p className={`hidden text-xs sm:block ${night ? "text-[#aeaeb2]" : "text-muted-foreground"}`}>
                       Typical {MODE_LABEL[shown.route.mode].toLowerCase()} time from OSRM via FOSSGIS. Not live traffic.
                       {shown.fromCache ? ` Cached result from ${formatWhen(shown.route.fetchedAt)}.` : " Just fetched."}
@@ -498,10 +539,7 @@ export function Planner() {
               )}
               {otherOpen && !leg.samePlace ? (
                 <p className={`mt-1 px-1 text-xs ${night ? "text-[#aeaeb2]" : "text-muted-foreground"}`}>
-                  Transit, taxi, and rideshare times are not estimated here.{" "}
-                  <a className="underline" href={googleDirectionsUrl(leg.from, leg.to, "transit")} target="_blank" rel="noreferrer">
-                    Google transit
-                  </a>
+                  Taxi and rideshare times are not estimated here.
                 </p>
               ) : null}
             </section>

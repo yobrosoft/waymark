@@ -106,7 +106,8 @@ export function HelpDialog({
             <p className="mt-1 text-muted-foreground">
               The map asks Google for the streets, restaurants, landmarks, and other places in the
               current view. A selected drive, walk, or cycle leg sends those two coordinates from this
-              browser to the FOSSGIS OSRM demo (routing.openstreetmap.de). A nearby-category search
+              browser to the FOSSGIS OSRM demo (routing.openstreetmap.de). A public-transport leg sends
+              those two coordinates and a departure time to Google. A nearby-category search
               sends the pin and a 700 metre query to a public Overpass server, which often refuses or
               times out; the list then stays empty and says so. Address search is off because the public
               geocoder refuses browser requests. Names, notes, and the rest of the library are not part
@@ -119,11 +120,13 @@ export function HelpDialog({
           <section>
             <h3 className="font-heading text-base font-medium">Routes are not guesses</h3>
             <p className="mt-1 text-muted-foreground">
-              Distance and time appear only when OSRM returns a road route. The time is a typical
-              uncongested estimate, not live traffic. The graphs are rebuilt about every two days.
-              Walking and cycling use the foot and bike profiles. Transit, taxi, and rideshare times are
-              not invented; those links open Google Maps, and any time you see there is Google&apos;s.
-              If the routing service fails, the line stays off and the numbers stay blank.
+              Distance and time appear only when a routing service returns them. Drive, walk, and cycle
+              come from OSRM. That time is a typical uncongested estimate, not live traffic. The graphs
+              are rebuilt about every two days. Walking and cycling use the foot and bike profiles.
+              Public transport comes from Google for the selected leg, including the line and a scheduled
+              time. It is not a live delay, and Google only returns it for about the next 100 days. Taxi
+              and rideshare times are not estimated. If a service fails, the line stays off and the
+              numbers stay blank.
               Same-place rest stops do not request a route. Ferry avoidance is not guaranteed on the
               OSRM profile. The Google driving link asks Google to avoid ferries.
             </p>

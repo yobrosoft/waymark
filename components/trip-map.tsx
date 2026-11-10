@@ -46,6 +46,7 @@ const MODE_COLOR: Record<LegMode, string> = {
   driving: "#007aff",
   walking: "#34c759",
   cycling: "#ff9500",
+  transit: "#5856d6",
 };
 
 declare global {

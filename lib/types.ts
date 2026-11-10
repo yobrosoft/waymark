@@ -2,7 +2,8 @@ export const SCHEMA_VERSION = 1 as const;
 
 export type TripStatus = "proposed" | "draft" | "confirmed";
 export type StopStatus = "proposed" | "confirmed" | "optional" | "buffer";
-export type LegMode = "driving" | "walking" | "cycling";
+export type LegMode = "driving" | "walking" | "cycling" | "transit";
+export type RoadMode = Exclude<LegMode, "transit">;
 
 export interface Day {
   id: string;
@@ -67,14 +68,16 @@ export interface LineStringGeometry {
 }
 
 export interface RoutePayload {
-  provider: "fossgis-osrm";
-  profile: "driving" | "foot" | "bike";
+  provider: "fossgis-osrm" | "google-transit";
+  profile: "driving" | "foot" | "bike" | "transit";
   mode: LegMode;
   distanceMeters: number;
   durationSeconds: number;
   geometry: LineStringGeometry;
   traffic: "not-live";
   fetchedAt: string;
+  /** Services and the departure used for a public-transport leg. */
+  summary?: string;
 }
 
 export type RouteView =

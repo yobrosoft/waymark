@@ -223,8 +223,8 @@ func Validate(trip Trip) []string {
 			push("legModes: invalid key %s.", key)
 			continue
 		}
-		if mode != "driving" && mode != "walking" && mode != "cycling" {
-			push("legModes.%s: use driving, walking, or cycling.", key)
+		if mode != "driving" && mode != "walking" && mode != "cycling" && mode != "transit" {
+			push("legModes.%s: use driving, walking, cycling, or transit.", key)
 		}
 		from, to, _ := bytes.Cut([]byte(key), []byte(">"))
 		if _, ok := stopIDs[string(from)]; !ok {

@@ -1,4 +1,4 @@
-import type { Coord, LegMode, NearbyCategory } from "@/lib/types";
+import type { Coord, NearbyCategory, RoadMode } from "@/lib/types";
 
 /** Maps JavaScript API console. The key is a browser key, restricted by HTTP referrer. */
 export const GOOGLE_MAPS_KEY_URL =
@@ -11,7 +11,7 @@ export const APP_USER_AGENT =
  * FOSSGIS public OSRM demo (routing.openstreetmap.de).
  * Car, foot, and bike graphs. Not live traffic. One request per second.
  */
-export const OSRM_ENDPOINTS: Record<LegMode, { url: string; profile: "driving" | "foot" | "bike" }> = {
+export const OSRM_ENDPOINTS: Record<RoadMode, { url: string; profile: "driving" | "foot" | "bike" }> = {
   driving: {
     url: "https://routing.openstreetmap.de/routed-car/route/v1/driving",
     profile: "driving",
@@ -69,7 +69,7 @@ export const NEARBY_CATEGORIES: Record<
   },
 };
 
-export function buildOsrmUrl(mode: LegMode, from: Coord, to: Coord): string {
+export function buildOsrmUrl(mode: RoadMode, from: Coord, to: Coord): string {
   const endpoint = OSRM_ENDPOINTS[mode];
   const coordPath = `${from.lon},${from.lat};${to.lon},${to.lat}`;
   const url = new URL(`${endpoint.url}/${coordPath}`);
@@ -123,7 +123,7 @@ export function googleDirectionsUrl(
   return `https://www.google.com/maps/dir/?${params.toString()}`;
 }
 
-export function routeApiPath(mode: LegMode, from: Coord, to: Coord): string {
+export function routeApiPath(mode: RoadMode, from: Coord, to: Coord): string {
   const params = new URLSearchParams({
     mode,
     fromLat: String(from.lat),

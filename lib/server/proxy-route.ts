@@ -1,10 +1,10 @@
 import { isSamePlace, parseDecimalCoord } from "@/lib/geo";
 import { APP_USER_AGENT, buildOsrmUrl } from "@/lib/providers";
 import { parseOsrmBody } from "@/lib/routing";
-import type { LegMode } from "@/lib/types";
+import type { RoadMode } from "@/lib/types";
 import { osrmQueue, recall, remember } from "@/lib/server/schedule";
 
-const MODES = new Set<LegMode>(["driving", "walking", "cycling"]);
+const MODES = new Set<RoadMode>(["driving", "walking", "cycling"]);
 
 function failure(status: number, error: string) {
   return { status, body: { ok: false as const, error } };
@@ -17,8 +17,8 @@ export async function proxyRoute(
   now = () => new Date().toISOString(),
 ): Promise<{ status: number; body: unknown }> {
   const mode = params.get("mode");
-  if (!mode || !MODES.has(mode as LegMode)) {
-    return failure(400, "Choose driving, walking, or cycling. Other modes are not estimated here.");
+  if (!mode || !MODES.has(mode as RoadMode)) {
+    return failure(400, "Choose driving, walking, or cycling. Public transport is requested from Google in the browser.");
   }
   const from = parseDecimalCoord(params.get("fromLat"), params.get("fromLon"));
   const to = parseDecimalCoord(params.get("toLat"), params.get("toLon"));
@@ -28,7 +28,7 @@ export async function proxyRoute(
   if (isSamePlace(from, to)) {
     return { status: 200, body: { ok: true, samePlace: true } };
   }
-  const legMode = mode as LegMode;
+  const legMode = mode as RoadMode;
   const cacheKey = buildOsrmUrl(legMode, from, to);
   const cached = recall(cacheKey);
   if (cached) return { status: cached.status, body: cached.body };

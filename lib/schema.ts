@@ -50,7 +50,7 @@ export const tripSchema = z
     days: z.array(daySchema).min(1).max(60),
     locations: z.array(placeSchema).max(200),
     stops: z.array(stopSchema).max(200),
-    legModes: z.record(z.string(), z.enum(["driving", "walking", "cycling"])),
+    legModes: z.record(z.string(), z.enum(["driving", "walking", "cycling", "transit"])),
     createdAt: timestamp,
     updatedAt: timestamp,
     kind: z.literal("waymark.trip").optional(),

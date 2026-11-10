@@ -109,4 +109,5 @@ export const MODE_LABEL: Record<string, string> = {
   driving: "Drive",
   walking: "Walk",
   cycling: "Cycle",
+  transit: "Transit",
 };

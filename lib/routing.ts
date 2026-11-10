@@ -1,17 +1,32 @@
 import { isSamePlace, round5 } from "@/lib/geo";
 import { buildOsrmUrl } from "@/lib/providers";
-import type { Coord, LegMode, LineStringGeometry, RoutePayload, RouteView } from "@/lib/types";
+import type { Coord, LegMode, LineStringGeometry, RoadMode, RoutePayload, RouteView } from "@/lib/types";
 
 export const ROUTE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const TRANSIT_MEMORY_MS = 30 * 60 * 1000;
 
-const PROFILES: Record<LegMode, RoutePayload["profile"]> = {
+const PROFILES: Record<RoadMode, RoutePayload["profile"]> = {
   driving: "driving",
   walking: "foot",
   cycling: "bike",
 };
 
-export function routeCacheKey(mode: LegMode, from: Coord, to: Coord): string {
-  return `v1|${mode}|${round5(from.lon)},${round5(from.lat)}|${round5(to.lon)},${round5(to.lat)}`;
+const transitMemory = new Map<string, RoutePayload>();
+
+export function routeCacheKey(mode: LegMode, from: Coord, to: Coord, departAt?: string): string {
+  const when = mode === "transit" && departAt ? `|${departAt}` : "";
+  return `v1|${mode}|${round5(from.lon)},${round5(from.lat)}|${round5(to.lon)},${round5(to.lat)}${when}`;
+}
+
+function recallTransit(key: string, now = Date.now()): RoutePayload | undefined {
+  const hit = transitMemory.get(key);
+  if (!hit) return undefined;
+  const age = now - Date.parse(hit.fetchedAt);
+  if (!Number.isFinite(age) || age > TRANSIT_MEMORY_MS) {
+    transitMemory.delete(key);
+    return undefined;
+  }
+  return hit;
 }
 
 export function routeLine(view: RouteView): LineStringGeometry | null {
@@ -31,7 +46,7 @@ function pair(value: unknown): [number, number] | null {
 
 export function parseOsrmBody(
   body: unknown,
-  mode: LegMode,
+  mode: RoadMode,
   fetchedAt: string,
 ): { ok: true; route: RoutePayload } | { ok: false; error: string } {
   if (!body || typeof body !== "object") {
@@ -107,16 +122,65 @@ export async function resolveRoute(input: {
   fetchedAt?: string;
   now?: number;
   signal?: AbortSignal;
+  /** Full ISO departure sent to Google for a public-transport leg. */
+  departAt?: string;
+  /** Stable cache token for that departure. A "leaving now" leg uses a 15-minute bucket. */
+  transitKey?: string;
+  departureNote?: string;
   cacheGet: (key: string) => Promise<RoutePayload | undefined>;
   cacheSet: (key: string, value: RoutePayload) => Promise<void>;
   fetcher?: typeof fetch;
+  fetchTransit?: (request: {
+    from: Coord;
+    to: Coord;
+    departAt: Date;
+    note: string;
+    signal?: AbortSignal;
+  }) => Promise<{ ok: true; route: RoutePayload } | { ok: false; error: string }>;
 }): Promise<Exclude<RouteView, { status: "loading" | "idle" }>> {
   if (input.samePlace || isSamePlace(input.from, input.to)) {
     return { status: "same-place" };
   }
-  const key = routeCacheKey(input.mode, input.from, input.to);
+  const key = routeCacheKey(input.mode, input.from, input.to, input.transitKey ?? input.departAt);
   const cached = await input.cacheGet(key);
   if (cached) return { status: "ready", route: cached, fromCache: true };
+  if (input.mode === "transit") {
+    const remembered = recallTransit(key);
+    if (remembered) return { status: "ready", route: remembered, fromCache: true };
+    if (!input.departAt) {
+      return { status: "error", message: "This transit leg has no departure time. No line was drawn." };
+    }
+    const departAt = new Date(input.departAt);
+    if (Number.isNaN(departAt.getTime())) {
+      return { status: "error", message: "This transit leg has no departure time. No line was drawn." };
+    }
+    const fetchTransit =
+      input.fetchTransit ??
+      (async (request) => {
+        const { fetchGoogleTransit } = await import("@/lib/transit-google");
+        return fetchGoogleTransit(request);
+      });
+    const parsed = await fetchTransit({
+      from: input.from,
+      to: input.to,
+      departAt,
+      note: input.departureNote ?? "",
+      signal: input.signal,
+    });
+    if (!parsed.ok) {
+      if (parsed.error === "cancelled" || input.signal?.aborted) {
+        return { status: "error", message: "cancelled", cancelled: true };
+      }
+      return { status: "error", message: parsed.error };
+    }
+    transitMemory.set(key, parsed.route);
+    if (transitMemory.size > 40) {
+      const oldest = transitMemory.keys().next().value;
+      if (oldest) transitMemory.delete(oldest);
+    }
+    await input.cacheSet(key, parsed.route);
+    return { status: "ready", route: parsed.route, fromCache: false };
+  }
   const fetcher = input.fetcher ?? fetch;
   let response: Response;
   try {

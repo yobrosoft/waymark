@@ -36,7 +36,7 @@ To let Grok read a shared trip and send a suggestion back, run the Waymark MCP a
 - **Reset** returns to the first stop and frames the airport (or that trip's first pin).
 - **Overview** frames every saved place. **Fit leg** frames the current road route, or the pin if there is no route.
 - The day chips jump to the first stop on that day. A map pin jumps to the next visit of that place, then wraps.
-- Drive, walk, and cycle use real routed geometry. Transit and taxi open Google Maps instead of showing a made-up time.
+- Drive, walk, and cycle use real routed geometry. Public transport uses Google's transit directions for that leg. Taxi and rideshare are not estimated.
 - Save several trips: create, edit, duplicate, delete (with confirmation), reorder stops, and edit coordinates or search for a place. On the hosted app those writes go to the account. Locally they stay in this browser.
 - Export one trip or the whole library as JSON. Import validates the file before anything is written. Adding a file as new trips does not overwrite existing ones. Replacing same ids is a separate button.
 
@@ -58,6 +58,7 @@ Export a JSON file when you want a portable backup.
 | --- | --- | --- | --- |
 | Basemap, labels, restaurants, landmarks | [Google Maps](https://developers.google.com/maps/documentation/javascript) JavaScript API | The current map view, from this browser, with the API key | Normal pan and zoom. Google’s logo stays on the map. |
 | Drive, walk, cycle | [FOSSGIS OSRM](https://routing.openstreetmap.de/about.html) (`routing.openstreetmap.de`) | The two coordinates of the selected leg | About one upstream request per second. Successful routes are cached in this browser for 7 days. Not live traffic. Graphs are rebuilt about every two days. |
+| Public transport | [Google Routes](https://developers.google.com/maps/documentation/routes) | The two coordinates and a departure time | One leg at a time. Scheduled time, not a live delay. About the next 100 days. |
 | Address search | Not used | Nothing | Turned off. The public geocoder refuses browser requests. Enter coordinates instead. |
 | Nearby food, cafes, pharmacy, shops, sights | Public [Overpass](https://wiki.openstreetmap.org/wiki/Overpass_API) (overpass-api.de, then overpass.kumi.systems if that instance is unavailable) | Pin coordinate and a 700 m category query | Slower queue. Cached 12 hours. Distances are straight-line, not travel times. |
 
@@ -69,7 +70,7 @@ Keep Google’s logo on the map, and keep the OSRM attribution. [Fix the map](ht
 
 The basemap needs a Maps JavaScript API key. Paste it into the map pane (it stays in this browser’s local storage) or set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` before `npm run dev` or `npm run build`. Enable **Maps JavaScript API** on the key, and restrict it by HTTP referrer (`http://127.0.0.1:3847/*` for this dev server). A key set at build time is visible in the static files. That is how this API works. Do not use a secret server key.
 
-Google Maps links are external pages. Times on those pages are Google's. The driving and transit links ask Google to avoid ferries. The OSRM profile does not guarantee that.
+Google Maps links are external pages. Times on those pages are Google's. The driving and transit links ask Google to avoid ferries. The OSRM profile does not guarantee that. A transit leg on the map is also Google's, for the departure time shown with it.
 
 Pins are facility, property, or complex points from the source notes. They are not a surveyed step-free entrance or an airport curb.
 
@@ -90,7 +91,7 @@ Library
     days[]            calendar dates
     locations[]       reusable places (name, address, lat, lon, pin note)
     stops[]           ordered visits (day, place, planned time, status, notes, access)
-    legModes{}        "fromStopId>toStopId" -> driving | walking | cycling
+    legModes{}        "fromStopId>toStopId" -> driving | walking | cycling | transit
 ```
 
 Stop status `buffer` is a same-place rest. Trip status `proposed` means the plan is not confirmed.
