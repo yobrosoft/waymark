@@ -97,7 +97,7 @@ export function HelpDialog({
             </h3>
             <p className="mt-1 text-muted-foreground">
               {accountMode
-                ? "Trips are stored with the Waymark account. Sign in with the same Google account on another browser or phone and they are there. A view link shares one trip for reading. An agent connected to this account, including Grok, reads and updates the same trips. Export a JSON backup when you want your own file. Reloading the page does not replace your edits with the sample."
+                ? "Trips are stored with the Waymark account. Sign in with the same Google account on another browser or phone and they are there. A view link shares one trip for reading. An agent connected to this account, including Grok, reads and updates the same trips. A trip it saves shows up in this library within a few seconds. Export a JSON backup when you want your own file. Reloading the page does not replace your edits with the sample."
                 : "Trips are stored in IndexedDB in this browser profile. They are not synced to an account and this site does not upload them. Another phone, another browser, or a cleared site-storage setting will not have them. Export a JSON backup when a trip matters. Reloading the page does not replace your edits with the sample."}
             </p>
           </section>

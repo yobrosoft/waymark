@@ -33,8 +33,8 @@ async function request(path: string, init: RequestInit = {}, token = accountToke
   return fetch(`${API_URL}${path}`, { ...init, headers });
 }
 
-async function read(response: Response): Promise<{ ok?: boolean; error?: string; trip?: Trip; trips?: { id: string }[]; token?: string }> {
-  const body = (await response.json()) as { ok?: boolean; error?: string; trip?: Trip; trips?: { id: string }[]; token?: string };
+async function read(response: Response): Promise<{ ok?: boolean; error?: string; trip?: Trip; trips?: { id: string; updatedAt?: string }[]; token?: string }> {
+  const body = (await response.json()) as { ok?: boolean; error?: string; trip?: Trip; trips?: { id: string; updatedAt?: string }[]; token?: string };
   if (!response.ok || body.ok === false) {
     throw new Error(body.error || "The account service did not accept that.");
   }
@@ -98,7 +98,49 @@ function fingerprint(trip: Trip): string {
   return JSON.stringify(copy);
 }
 
-export async function syncAccountLibrary(prev: Library | null, next: Library) {
+export interface AccountTripSummary {
+  id: string;
+  updatedAt?: string;
+}
+
+/** Bring trips saved on the account into the open library. A newer copy replaces the one on screen. */
+export function absorbAccountTrips(
+  library: Library,
+  incoming: Trip[],
+  now: string,
+): { library: Library; added: string[] } {
+  const known = new Map(library.trips.map((trip) => [trip.id, trip]));
+  let trips = library.trips;
+  const added: string[] = [];
+  let changed = false;
+  for (const remote of incoming) {
+    const current = known.get(remote.id);
+    if (!current) {
+      trips = [remote, ...trips];
+      added.push(remote.name);
+      changed = true;
+      continue;
+    }
+    if (remote.updatedAt > current.updatedAt) {
+      trips = trips.map((trip) => (trip.id === remote.id ? remote : trip));
+      changed = true;
+    }
+  }
+  if (!changed) return { library, added };
+  const activeTripId =
+    library.activeTripId && trips.some((trip) => trip.id === library.activeTripId)
+      ? library.activeTripId
+      : (trips[0]?.id ?? null);
+  return { library: { ...library, trips, activeTripId, updatedAt: now }, added };
+}
+
+export async function listAccountTrips(): Promise<AccountTripSummary[]> {
+  const response = await request("/v1/trips");
+  const body = await read(response);
+  return (body.trips ?? []).map((item) => ({ id: item.id, updatedAt: item.updatedAt }));
+}
+
+export async function syncAccountLibrary(prev: Library | null, next: Library, deletedIds: string[] = []) {
   const before = new Map((prev?.trips ?? []).map((trip) => [trip.id, fingerprint(trip)]));
   const kept = new Set(next.trips.map((trip) => trip.id));
   for (const trip of next.trips) {
@@ -114,7 +156,7 @@ export async function syncAccountLibrary(prev: Library | null, next: Library) {
       await read(response);
     }
   }
-  for (const id of before.keys()) {
+  for (const id of deletedIds) {
     if (kept.has(id)) continue;
     const response = await request(`/v1/trips/${encodeURIComponent(id)}`, { method: "DELETE" });
     await read(response);

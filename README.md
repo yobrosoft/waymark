@@ -45,7 +45,7 @@ Two hotel stops in the sample are same-place rest. Those legs do not request a r
 
 ## Where data lives
 
-On the hosted app, trip names, notes, days, and stops are stored in the signed-in account. Sign in with the same Google account in another browser and they are there. An agent connected to that account reads and updates the same trips. Share copies a view link for one trip.
+On the hosted app, trip names, notes, days, and stops are stored in the signed-in account. Sign in with the same Google account in another browser and they are there. An agent connected to that account reads and updates the same trips. A trip it saves appears in the open library within a few seconds. Share copies a view link for one trip.
 
 A local run without `NEXT_PUBLIC_WAYMARK_API_URL` stores that document in **IndexedDB** in this browser profile (`waymark` / `library`). It is not synced and it is not uploaded. Clearing site data, or opening another browser or phone, starts from an empty book (the sample is added only when that store is empty). A reload does not put the sample back on top of edits. If the saved document is from a newer version or does not validate, Waymark leaves it untouched and offers a download.
 

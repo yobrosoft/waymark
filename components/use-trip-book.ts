@@ -27,8 +27,10 @@ import {
 } from "@/lib/storage";
 import {
   API_URL,
+  absorbAccountTrips,
   accountToken,
   fetchAccountTrip,
+  listAccountTrips,
   loadAccountLibrary,
   loadSharedTrip,
   setAccountToken,
@@ -202,7 +204,7 @@ export function useTripBook() {
   const trip =
     library?.trips.find((item) => item.id === library.activeTripId) ?? library?.trips[0] ?? null;
 
-  const persist = useCallback(async (next: Library) => {
+  const persist = useCallback(async (next: Library, deletedIds: string[] = []) => {
     const previous = libraryRef.current;
     libraryRef.current = next;
     setLibrary(next);
@@ -211,7 +213,7 @@ export function useTripBook() {
       if (readonly) return;
       savingRef.current = true;
       try {
-        await syncAccountLibrary(previous, next);
+        await syncAccountLibrary(previous, next, deletedIds);
       } catch (err) {
         setWarning(err instanceof Error ? err.message : "The account could not be saved.");
       } finally {
@@ -254,28 +256,35 @@ export function useTripBook() {
   );
 
   useEffect(() => {
-    if (!accountMode || readonly || status !== "ready" || !trip) return;
-    const tripId = trip.id;
-    const seen = trip.updatedAt;
+    if (!accountMode || readonly || status !== "ready") return;
     const timer = window.setInterval(() => {
       if (savingRef.current) return;
-      void fetchAccountTrip(tripId)
-        .then((remote) => {
-          if (!remote || remote.updatedAt <= seen) return;
+      void listAccountTrips()
+        .then(async (summaries) => {
           const current = libraryRef.current;
-          if (!current) return;
-          const next = {
-            ...current,
-            trips: current.trips.map((item) => (item.id === remote.id ? remote : item)),
-            updatedAt: remote.updatedAt,
-          };
-          libraryRef.current = next;
-          setLibrary(next);
+          if (!current || savingRef.current) return;
+          const byId = new Map(current.trips.map((item) => [item.id, item]));
+          const needed = summaries.filter((item) => {
+            const local = byId.get(item.id);
+            return !local || (item.updatedAt != null && item.updatedAt > local.updatedAt);
+          });
+          if (needed.length === 0) return;
+          const incoming = (
+            await Promise.all(needed.map(async (item) => fetchAccountTrip(item.id)))
+          ).filter((item): item is Trip => item != null);
+          const latest = libraryRef.current;
+          if (!latest || savingRef.current || incoming.length === 0) return;
+          const merged = absorbAccountTrips(latest, incoming, new Date().toISOString());
+          if (merged.library === latest) return;
+          libraryRef.current = merged.library;
+          setLibrary(merged.library);
+          if (merged.added.length === 1) setWarning(`${merged.added[0]} was added to this account.`);
+          else if (merged.added.length > 1) setWarning(`${merged.added.length} trips were added to this account.`);
         })
         .catch(() => undefined);
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [accountMode, readonly, status, trip]);
+  }, [accountMode, readonly, status]);
 
   const selectTrip = useCallback(
     async (tripId: string) => {
@@ -342,7 +351,7 @@ export function useTripBook() {
     async removeTrip(tripId: string) {
       if (!library) return;
       const next = deleteTrip(library, tripId, new Date().toISOString());
-      await persist(next);
+      await persist(next, [tripId]);
       const chosen = next.trips.find((item) => item.id === next.activeTripId) ?? next.trips[0];
       setIndexState(chosen ? clampIndex(chosen.stops.length, readIndex(chosen.id)) : 0);
     },
