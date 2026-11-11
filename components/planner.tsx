@@ -16,6 +16,7 @@ import { resolveNearby } from "@/lib/lookups";
 import { googleDirectionsUrl } from "@/lib/providers";
 import { resolveRoute, routeLine } from "@/lib/routing";
 import { transitDeparture } from "@/lib/transit";
+import { stayEstimate, stayPhrase } from "@/lib/stay";
 import {
   deleteStop,
   mapPlaces,
@@ -296,6 +297,7 @@ export function Planner() {
   const night = Boolean(stop && isNightTime(stop.plannedTime));
   const dayLabel = day ? `${formatDay(day.date)} · ${day.title}` : trip?.name ?? "No trip open";
   const when = stop ? approximateTime(stop.plannedTime) : "";
+  const stay = trip && stop ? stayEstimate(trip, index) : null;
 
   async function reorder(stopIndex: number, direction: -1 | 1) {
     if (!trip) return;
@@ -325,7 +327,7 @@ export function Planner() {
             {book.readonly
               ? "Shared view"
               : place
-                ? `${when === "—" ? "" : `${when} · `}${place.name}`
+                ? `${when === "—" ? "" : `${when} · `}${place.name}${stay ? ` · ${stayPhrase(stay)}` : ""}`
                 : trip
                   ? "No stop selected"
                   : "Open a trip to see it on the map"}

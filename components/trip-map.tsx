@@ -291,10 +291,10 @@ export function TripMap({ places, line, mode, nearby, camera, night, active, onS
       const wrapper = document.createElement("div");
       wrapper.className = "waymark-marker";
       wrapper.dataset.anchor = "bottom";
-      wrapper.style.zIndex = place.selected ? "4" : "1";
+      wrapper.style.zIndex = place.emphasis === "next" ? "5" : place.emphasis === "from" ? "3" : "1";
       const button = document.createElement("button");
       button.type = "button";
-      button.className = `waymark-pin${place.selected ? " is-selected" : ""}`;
+      button.className = `waymark-pin${place.emphasis === "next" ? " is-next" : ""}${place.emphasis === "from" ? " is-from" : ""}`;
       button.style.setProperty("--pin", place.color);
       button.title = `${place.kindLabel} · ${place.name}`;
       button.setAttribute("aria-label", place.aria);
@@ -310,6 +310,12 @@ export function TripMap({ places, line, mode, nearby, camera, night, active, onS
       name.className = "waymark-pin-name";
       name.textContent = place.name;
       body.append(icon, number, name);
+      if (place.stay) {
+        const stay = document.createElement("span");
+        stay.className = "waymark-pin-stay";
+        stay.textContent = place.stay;
+        body.append(stay);
+      }
       const tail = document.createElement("span");
       tail.className = "waymark-pin-tail";
       tail.setAttribute("aria-hidden", "true");

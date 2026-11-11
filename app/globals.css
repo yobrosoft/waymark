@@ -209,9 +209,20 @@
   box-shadow: inset 0 0 0 1px rgb(0 0 0 / 8%);
 }
 
-.waymark-pin.is-selected .waymark-pin-body {
-  max-width: 16rem;
-  height: 2.25rem;
+.waymark-pin.is-from .waymark-pin-body {
+  height: 1.7rem;
+  max-width: 10rem;
+}
+
+.waymark-pin.is-from .waymark-pin-name {
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+
+.waymark-pin.is-next .waymark-pin-body {
+  max-width: 18rem;
+  height: 2.85rem;
+  padding-right: 0.65rem;
   box-shadow: inset 0 0 0 2px var(--pin, #007aff);
 }
 
@@ -226,9 +237,39 @@
   color: #ffffff;
 }
 
-.waymark-pin.is-selected .waymark-pin-icon {
-  width: 1.9rem;
-  height: 1.9rem;
+.waymark-pin.is-from .waymark-pin-icon {
+  width: 1.4rem;
+  height: 1.4rem;
+}
+
+.waymark-pin.is-next .waymark-pin-icon {
+  width: 2.35rem;
+  height: 2.35rem;
+}
+
+.waymark-pin.is-next .waymark-pin-icon svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.waymark-pin.is-next .waymark-pin-tail {
+  margin-left: calc(1.35rem - 6px);
+}
+
+.waymark-pin.is-from .waymark-pin-tail {
+  margin-left: calc(0.85rem - 6px);
+}
+
+.waymark-pin.is-next .waymark-pin-name {
+  font-size: 0.95rem;
+}
+
+.waymark-pin-stay {
+  flex: none;
+  color: var(--pin, #007aff);
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .waymark-pin-icon svg,
@@ -266,12 +307,13 @@
   border-top: 7px solid #ffffff;
 }
 
-.waymark-map.is-compact .waymark-pin:not(.is-selected) .waymark-pin-name,
-.waymark-map.is-compact .waymark-pin:not(.is-selected) .waymark-pin-num {
+.waymark-map.is-compact .waymark-pin:not(.is-next) .waymark-pin-name,
+.waymark-map.is-compact .waymark-pin:not(.is-next) .waymark-pin-num,
+.waymark-map.is-compact .waymark-pin:not(.is-next) .waymark-pin-stay {
   display: none;
 }
 
-.waymark-map.is-compact .waymark-pin:not(.is-selected) .waymark-pin-body {
+.waymark-map.is-compact .waymark-pin:not(.is-next) .waymark-pin-body {
   max-width: none;
   padding-right: 0.15rem;
 }

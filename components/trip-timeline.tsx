@@ -5,6 +5,7 @@ import { Popover } from "@base-ui/react/popover";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { approximateTime, formatDay, nightCount, nightLabel, STOP_STATUS_LABEL } from "@/lib/format";
+import { stayEstimate } from "@/lib/stay";
 import { googlePlaceUrl, NEARBY_CATEGORIES } from "@/lib/providers";
 import type { Day, NearbyCategory, NearbyPlace, Place, Stop, Trip } from "@/lib/types";
 import type { placesById } from "@/lib/trip-logic";
@@ -230,6 +231,7 @@ export function TripTimeline({
                 onClick={() => onSelect(stopIndex)}
               >
                 {approximateTime(stop.plannedTime)}
+                <span className="mt-0.5 block font-medium text-foreground/80">{stayEstimate(trip, stopIndex)?.label}</span>
               </button>
               <button
                 type="button"

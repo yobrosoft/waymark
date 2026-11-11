@@ -124,7 +124,10 @@ export function HelpDialog({
               come from OSRM. That time is a typical uncongested estimate, not live traffic. The graphs
               are rebuilt about every two days. Walking and cycling use the foot and bike profiles.
               Public transport comes from Google for the selected leg, including the line and a scheduled
-              time. It is not a live delay, and Google only returns it for about the next 100 days. Taxi
+              time. It is not a live delay, and Google only returns it for about the next 100 days. Time
+              at a place is separate. A written window uses its longer end, a stay that runs into the
+              next day is overnight, and anything else is a long estimate for that kind of place. The
+              next place on the leg is the larger pin and shows that time. Taxi
               and rideshare times are not estimated. If a service fails, the line stays off and the
               numbers stay blank.
               Same-place rest stops do not request a route. Ferry avoidance is not guaranteed on the

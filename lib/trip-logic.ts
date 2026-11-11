@@ -1,6 +1,7 @@
 import { legKey } from "@/lib/ids";
 import { isSamePlace } from "@/lib/geo";
 import { classifyPlace, placeKindLabel, type PlaceKind } from "@/lib/place-kind";
+import { stayEstimate } from "@/lib/stay";
 import type { LegMode, Library, Place, Stop, Trip } from "@/lib/types";
 
 export const DAY_COLORS = [
@@ -108,6 +109,10 @@ export interface MapPlace {
   kind: PlaceKind;
   kindLabel: string;
   aria: string;
+  /** The stop you are going to on this leg. Larger than the place you are leaving. */
+  emphasis: "next" | "from" | "other";
+  /** Time expected at the next place. Empty on the other pins. */
+  stay: string;
 }
 
 export function mapPlaces(trip: Trip, index: number): MapPlace[] {
@@ -119,6 +124,9 @@ export function mapPlaces(trip: Trip, index: number): MapPlace[] {
     list.push(stopIndex);
     grouped.set(stop.locationId, list);
   });
+  const nextId = trip.stops[index]?.locationId;
+  const fromId = index > 0 ? trip.stops[index - 1]?.locationId : undefined;
+  const stay = stayEstimate(trip, index)?.label ?? "";
   const markers: MapPlace[] = [];
   for (const [locationId, visits] of grouped) {
     const place = places.get(locationId);
@@ -134,6 +142,7 @@ export function mapPlaces(trip: Trip, index: number): MapPlace[] {
       notes,
     });
     const kindLabel = placeKindLabel(kind);
+    const emphasis = locationId === nextId ? "next" : locationId === fromId ? "from" : "other";
     markers.push({
       locationId,
       name: place.name,
@@ -145,9 +154,11 @@ export function mapPlaces(trip: Trip, index: number): MapPlace[] {
       badge: String(shown + 1),
       kind,
       kindLabel,
+      emphasis,
+      stay: emphasis === "next" ? stay : "",
       aria: `${place.name}, ${kindLabel}. Stop ${shown + 1}${
         visits.length > 1 ? `, ${visits.length} visits on this trip` : ""
-      }`,
+      }${emphasis === "next" && stay ? `. ${stay}` : ""}`,
     });
   }
   return markers;

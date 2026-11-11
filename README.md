@@ -37,6 +37,7 @@ To let Grok read a shared trip and send a suggestion back, run the Waymark MCP a
 - **Overview** frames every saved place. **Fit leg** frames the current road route, or the pin if there is no route.
 - The day chips jump to the first stop on that day. A map pin jumps to the next visit of that place, then wraps.
 - Drive, walk, and cycle use real routed geometry. Public transport uses Google's transit directions for that leg. Taxi and rideshare are not estimated.
+- Time at a place is shown on the next pin, which is larger than the place you are leaving. A written window uses its longer end. A stay into the next day is overnight. Otherwise the time is a long estimate for that kind of place.
 - Save several trips: create, edit, duplicate, delete (with confirmation), reorder stops, and edit coordinates or search for a place. On the hosted app those writes go to the account. Locally they stay in this browser.
 - Export one trip or the whole library as JSON. Import validates the file before anything is written. Adding a file as new trips does not overwrite existing ones. Replacing same ids is a separate button.
 
